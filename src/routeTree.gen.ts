@@ -9,38 +9,152 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
+import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
+import { Route as DashboardProcessingRouteImport } from './routes/dashboard/processing'
+import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardViewerRoute = DashboardViewerRouteImport.update({
+  id: '/viewer',
+  path: '/viewer',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardSubmitRoute = DashboardSubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardProcessingRoute = DashboardProcessingRouteImport.update({
+  id: '/processing',
+  path: '/processing',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardArchiveRoute = DashboardArchiveRouteImport.update({
+  id: '/archive',
+  path: '/archive',
+  getParentRoute: () => DashboardRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
+  '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/processing': typeof DashboardProcessingRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/submit': typeof DashboardSubmitRoute
+  '/dashboard/viewer': typeof DashboardViewerRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/processing': typeof DashboardProcessingRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/submit': typeof DashboardSubmitRoute
+  '/dashboard/viewer': typeof DashboardViewerRoute
+  '/dashboard': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
+  '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/processing': typeof DashboardProcessingRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/submit': typeof DashboardSubmitRoute
+  '/dashboard/viewer': typeof DashboardViewerRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/dashboard/archive'
+    | '/dashboard/processing'
+    | '/dashboard/settings'
+    | '/dashboard/submit'
+    | '/dashboard/viewer'
+    | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/dashboard/archive'
+    | '/dashboard/processing'
+    | '/dashboard/settings'
+    | '/dashboard/submit'
+    | '/dashboard/viewer'
+    | '/dashboard'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/dashboard/archive'
+    | '/dashboard/processing'
+    | '/dashboard/settings'
+    | '/dashboard/submit'
+    | '/dashboard/viewer'
+    | '/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +162,78 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/viewer': {
+      id: '/dashboard/viewer'
+      path: '/viewer'
+      fullPath: '/dashboard/viewer'
+      preLoaderRoute: typeof DashboardViewerRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/submit': {
+      id: '/dashboard/submit'
+      path: '/submit'
+      fullPath: '/dashboard/submit'
+      preLoaderRoute: typeof DashboardSubmitRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/processing': {
+      id: '/dashboard/processing'
+      path: '/processing'
+      fullPath: '/dashboard/processing'
+      preLoaderRoute: typeof DashboardProcessingRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/archive': {
+      id: '/dashboard/archive'
+      path: '/archive'
+      fullPath: '/dashboard/archive'
+      preLoaderRoute: typeof DashboardArchiveRouteImport
+      parentRoute: typeof DashboardRoute
+    }
   }
 }
 
+interface DashboardRouteChildren {
+  DashboardArchiveRoute: typeof DashboardArchiveRoute
+  DashboardProcessingRoute: typeof DashboardProcessingRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardSubmitRoute: typeof DashboardSubmitRoute
+  DashboardViewerRoute: typeof DashboardViewerRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardArchiveRoute: DashboardArchiveRoute,
+  DashboardProcessingRoute: DashboardProcessingRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardSubmitRoute: DashboardSubmitRoute,
+  DashboardViewerRoute: DashboardViewerRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
