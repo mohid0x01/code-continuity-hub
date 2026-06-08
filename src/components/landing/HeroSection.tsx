@@ -75,9 +75,9 @@ export function HeroSection() {
             transition={{ delay: 0.3, duration: 0.7 }}
           >
             <span className="text-text-primary">We Turn Unstructured </span>
-            <span className="text-gradient-gold font-curly italic">FIR Text</span>
+            <span className="text-gradient-gold font-curly font-normal italic tracking-wide">FIR Text</span>
             <span className="text-text-primary"> Into Visual </span>
-            <span className="text-gradient-gold font-curly italic">Crime Reconstructions</span>
+            <span className="text-gradient-gold font-curly font-normal italic tracking-wide">Crime Reconstructions</span>
           </motion.h1>
 
           <motion.p
