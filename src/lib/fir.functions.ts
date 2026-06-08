@@ -496,6 +496,8 @@ export const runMockPipeline = createServerFn({ method: "POST" })
               "timeline_sequencing",
               "scene_generation",
             ],
+            attempts: attemptsAll,
+            stage_times: stageTimes,
           },
         })
         .eq("id", jobId);
@@ -505,7 +507,16 @@ export const runMockPipeline = createServerFn({ method: "POST" })
       const msg = err instanceof Error ? err.message : String(err);
       await supabase
         .from("fir_jobs")
-        .update({ status: "failed", error_message: msg })
+        .update({
+          status: "failed",
+          error_message: msg,
+          pipeline_progress: {
+            current_stage: "failed",
+            attempts: attemptsAll,
+            stage_times: stageTimes,
+            failed_at: new Date().toISOString(),
+          },
+        })
         .eq("id", jobId);
       throw new Error(msg);
     }
