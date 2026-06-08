@@ -347,12 +347,26 @@ export const runMockPipeline = createServerFn({ method: "POST" })
     const jobId = data.jobId;
     const startTime = Date.now();
 
-    const setStage = async (stage: string, done: string[]) => {
+    const stageTimes: Record<string, number> = {};
+    const attemptsAll: AttemptLog[] = [];
+
+    const setStage = async (
+      stage: string,
+      done: string[],
+      extra: Record<string, unknown> = {},
+    ) => {
+      stageTimes[stage] = Date.now();
       await supabase
         .from("fir_jobs")
         .update({
           status: stage as never,
-          pipeline_progress: { current_stage: stage, stages_completed: done },
+          pipeline_progress: {
+            current_stage: stage,
+            stages_completed: done,
+            stage_started_at: new Date().toISOString(),
+            attempts: attemptsAll,
+            ...extra,
+          },
         })
         .eq("id", jobId);
     };
@@ -371,9 +385,30 @@ export const runMockPipeline = createServerFn({ method: "POST" })
 
       // Stage 2: entity extraction — actual LLM call
       await setStage("entity_extraction", ["preprocessing"]);
-      const scene = await callLLM(fir.raw_narrative, fir.incident_type);
+      const { result: scene, model: usedModel } = await callLLM(
+        fir.raw_narrative,
+        fir.incident_type,
+        async (attempt) => {
+          attemptsAll.push(attempt);
+          // Live-publish attempt list so UI can show which providers were tried.
+          await supabase
+            .from("fir_jobs")
+            .update({
+              llm_model: attempt.model,
+              pipeline_progress: {
+                current_stage: "entity_extraction",
+                stages_completed: ["preprocessing"],
+                attempts: attemptsAll,
+                stage_started_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", jobId);
+        },
+      );
 
-      if (!scene.entities?.length) throw new Error("AI extracted no entities from the narrative");
+      if (!scene.entities?.length) {
+        throw new Error("AI extracted no entities from the narrative");
+      }
 
       // Stage 3: spatial resolution — persist entities
       await setStage("spatial_resolution", ["preprocessing", "entity_extraction"]);
@@ -445,10 +480,12 @@ export const runMockPipeline = createServerFn({ method: "POST" })
         .update({
           status: "completed",
           processing_time_ms: processingTime,
+          llm_model: usedModel,
           scene_manifest: {
             entity_count: entityRows.length,
             event_count: eventRows.length,
-            model: "google/gemini-2.5-flash",
+            model: usedModel,
+            attempts: attemptsAll,
           },
           pipeline_progress: {
             current_stage: "completed",
