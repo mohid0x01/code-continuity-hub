@@ -188,7 +188,19 @@ const sceneSchema = {
   additionalProperties: false,
 };
 
-async function callLLM(narrative: string, incidentType: string) {
+// Provider fallback chain. If the primary model fails (rate-limit / credits /
+// timeout / 5xx / malformed output), we transparently try the next model so
+// the pipeline stays uninterrupted.
+const MODEL_CHAIN = [
+  "google/gemini-2.5-flash",
+  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-flash-lite",
+  "openai/gpt-5-mini",
+] as const;
+
+type AttemptLog = { model: string; ok: boolean; error?: string; ms: number };
+
+async function callLLMWithModel(model: string, narrative: string, incidentType: string) {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -219,7 +231,7 @@ Return ONLY valid JSON matching the schema. No prose, no markdown.`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -240,14 +252,23 @@ Return ONLY valid JSON matching the schema. No prose, no markdown.`;
 
   if (!res.ok) {
     const text = await res.text();
-    if (res.status === 429) throw new Error("AI rate limit reached. Try again shortly.");
-    if (res.status === 402) throw new Error("AI credits exhausted. Add credits in workspace settings.");
-    throw new Error(`AI gateway error ${res.status}: ${text.slice(0, 300)}`);
+    const err = new Error(`AI gateway error ${res.status}: ${text.slice(0, 200)}`) as Error & {
+      status?: number;
+      retryable?: boolean;
+    };
+    err.status = res.status;
+    // 429 (rate limit), 408 (timeout), 5xx → try next model. 402 (credits) → also try next.
+    err.retryable = res.status === 429 || res.status === 408 || res.status === 402 || res.status >= 500;
+    throw err;
   }
 
   const json = await res.json();
   const toolCall = json?.choices?.[0]?.message?.tool_calls?.[0];
-  if (!toolCall?.function?.arguments) throw new Error("AI returned no structured output");
+  if (!toolCall?.function?.arguments) {
+    const err = new Error("AI returned no structured output") as Error & { retryable?: boolean };
+    err.retryable = true;
+    throw err;
+  }
 
   const parsed = JSON.parse(toolCall.function.arguments) as {
     entities: Array<{
@@ -280,6 +301,44 @@ Return ONLY valid JSON matching the schema. No prose, no markdown.`;
   return parsed;
 }
 
+async function callLLM(
+  narrative: string,
+  incidentType: string,
+  onAttempt?: (a: AttemptLog) => Promise<void> | void,
+) {
+  const attempts: AttemptLog[] = [];
+  let lastErr: Error | null = null;
+
+  for (const model of MODEL_CHAIN) {
+    const start = Date.now();
+    try {
+      const result = await callLLMWithModel(model, narrative, incidentType);
+      if (!result.entities?.length) {
+        const err = new Error("AI returned empty entity list") as Error & { retryable?: boolean };
+        err.retryable = true;
+        throw err;
+      }
+      const log: AttemptLog = { model, ok: true, ms: Date.now() - start };
+      attempts.push(log);
+      await onAttempt?.(log);
+      return { result, model, attempts };
+    } catch (err) {
+      const e = err as Error & { retryable?: boolean; status?: number };
+      const log: AttemptLog = { model, ok: false, error: e.message, ms: Date.now() - start };
+      attempts.push(log);
+      await onAttempt?.(log);
+      lastErr = e;
+      // Non-retryable (e.g. 400 bad request, auth) → stop trying.
+      if (e.retryable === false) break;
+    }
+  }
+
+  const msg = lastErr?.message || "AI pipeline failed across all providers";
+  const final = new Error(`All AI providers failed. Last error: ${msg}`);
+  (final as Error & { attempts?: AttemptLog[] }).attempts = attempts;
+  throw final;
+}
+
 export const runMockPipeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { jobId: string }) => z.object({ jobId: z.string().uuid() }).parse(data))
@@ -288,12 +347,26 @@ export const runMockPipeline = createServerFn({ method: "POST" })
     const jobId = data.jobId;
     const startTime = Date.now();
 
-    const setStage = async (stage: string, done: string[]) => {
+    const stageTimes: Record<string, number> = {};
+    const attemptsAll: AttemptLog[] = [];
+
+    const setStage = async (
+      stage: string,
+      done: string[],
+      extra: Record<string, unknown> = {},
+    ) => {
+      stageTimes[stage] = Date.now();
       await supabase
         .from("fir_jobs")
         .update({
           status: stage as never,
-          pipeline_progress: { current_stage: stage, stages_completed: done },
+          pipeline_progress: {
+            current_stage: stage,
+            stages_completed: done,
+            stage_started_at: new Date().toISOString(),
+            attempts: attemptsAll,
+            ...extra,
+          },
         })
         .eq("id", jobId);
     };
@@ -312,9 +385,30 @@ export const runMockPipeline = createServerFn({ method: "POST" })
 
       // Stage 2: entity extraction — actual LLM call
       await setStage("entity_extraction", ["preprocessing"]);
-      const scene = await callLLM(fir.raw_narrative, fir.incident_type);
+      const { result: scene, model: usedModel } = await callLLM(
+        fir.raw_narrative,
+        fir.incident_type,
+        async (attempt) => {
+          attemptsAll.push(attempt);
+          // Live-publish attempt list so UI can show which providers were tried.
+          await supabase
+            .from("fir_jobs")
+            .update({
+              llm_model: attempt.model,
+              pipeline_progress: {
+                current_stage: "entity_extraction",
+                stages_completed: ["preprocessing"],
+                attempts: attemptsAll,
+                stage_started_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", jobId);
+        },
+      );
 
-      if (!scene.entities?.length) throw new Error("AI extracted no entities from the narrative");
+      if (!scene.entities?.length) {
+        throw new Error("AI extracted no entities from the narrative");
+      }
 
       // Stage 3: spatial resolution — persist entities
       await setStage("spatial_resolution", ["preprocessing", "entity_extraction"]);
@@ -386,10 +480,12 @@ export const runMockPipeline = createServerFn({ method: "POST" })
         .update({
           status: "completed",
           processing_time_ms: processingTime,
+          llm_model: usedModel,
           scene_manifest: {
             entity_count: entityRows.length,
             event_count: eventRows.length,
-            model: "google/gemini-2.5-flash",
+            model: usedModel,
+            attempts: attemptsAll,
           },
           pipeline_progress: {
             current_stage: "completed",
@@ -400,6 +496,8 @@ export const runMockPipeline = createServerFn({ method: "POST" })
               "timeline_sequencing",
               "scene_generation",
             ],
+            attempts: attemptsAll,
+            stage_times: stageTimes,
           },
         })
         .eq("id", jobId);
@@ -409,7 +507,16 @@ export const runMockPipeline = createServerFn({ method: "POST" })
       const msg = err instanceof Error ? err.message : String(err);
       await supabase
         .from("fir_jobs")
-        .update({ status: "failed", error_message: msg })
+        .update({
+          status: "failed",
+          error_message: msg,
+          pipeline_progress: {
+            current_stage: "failed",
+            attempts: attemptsAll,
+            stage_times: stageTimes,
+            failed_at: new Date().toISOString(),
+          },
+        })
         .eq("id", jobId);
       throw new Error(msg);
     }
