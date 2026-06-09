@@ -200,6 +200,51 @@ const MODEL_CHAIN = [
 
 type AttemptLog = { model: string; ok: boolean; error?: string; ms: number };
 
+// ============================================================
+// Zod schemas — validate & normalize LLM output
+// ============================================================
+const entitySchema = z.object({
+  entity_type: z.enum(["actor", "vehicle", "location", "object"]),
+  entity_role: z.string().optional().nullable(),
+  label: z.string().min(1).max(200),
+  description: z.string().max(2000).default(""),
+  confidence: z.coerce.number().min(0).max(1).default(0.5),
+  position_x: z.coerce.number().finite().default(0),
+  position_y: z.coerce.number().finite().default(0),
+  position_z: z.coerce.number().finite().default(0),
+  source_text: z.string().max(2000).default(""),
+});
+
+const eventSchema = z.object({
+  sequence_number: z.coerce.number().int().min(1),
+  entity_label: z.string().min(1).max(200),
+  action_label: z.string().min(1).max(200),
+  description: z.string().max(2000).default(""),
+  origin_x: z.coerce.number().finite().default(0),
+  origin_y: z.coerce.number().finite().default(0),
+  origin_z: z.coerce.number().finite().default(0),
+  dest_x: z.coerce.number().finite().default(0),
+  dest_y: z.coerce.number().finite().default(0),
+  dest_z: z.coerce.number().finite().default(0),
+  duration_seconds: z.coerce.number().min(0.1).max(60).default(2),
+  source_text: z.string().max(2000).default(""),
+});
+
+const sceneOutputSchema = z.object({
+  entities: z.array(entitySchema).min(1, "AI returned no entities"),
+  events: z.array(eventSchema).default([]),
+});
+
+export type NormalizedScene = z.infer<typeof sceneOutputSchema>;
+
+function normalizeScene(raw: unknown): NormalizedScene {
+  const parsed = sceneOutputSchema.parse(raw);
+  // Drop events that reference a non-existent entity label.
+  const labels = new Set(parsed.entities.map((e) => e.label));
+  parsed.events = parsed.events.filter((ev) => labels.has(ev.entity_label));
+  return parsed;
+}
+
 async function callLLMWithModel(model: string, narrative: string, incidentType: string) {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
@@ -298,7 +343,17 @@ Return ONLY valid JSON matching the schema. No prose, no markdown.`;
     }>;
   };
 
-  return parsed;
+  // Schema-validate & normalize. Throw a retryable error if the LLM produced
+  // garbage so the fallback chain can try the next model.
+  try {
+    return normalizeScene(parsed);
+  } catch (e) {
+    const err = new Error(
+      `AI output failed schema validation: ${e instanceof Error ? e.message : String(e)}`,
+    ) as Error & { retryable?: boolean };
+    err.retryable = true;
+    throw err;
+  }
 }
 
 async function callLLM(
