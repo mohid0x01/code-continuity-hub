@@ -123,6 +123,20 @@ export const retryJob = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+export const getJobAttempts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { jobId: string }) => z.object({ jobId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: rows, error } = await supabase
+      .from("pipeline_attempts")
+      .select("*")
+      .eq("job_id", data.jobId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return rows || [];
+  });
+
 // ============================================================
 // REAL AI PIPELINE — powered by Lovable AI Gateway
 // ============================================================
