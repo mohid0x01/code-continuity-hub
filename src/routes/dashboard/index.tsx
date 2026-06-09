@@ -5,6 +5,8 @@ import { FileText, CheckCircle, Loader, TrendingUp, ArrowRight, AlertCircle, Eye
 import { useJobsRealtime } from "@/hooks/useJobRealtime";
 import { useJobToasts } from "@/hooks/useJobToasts";
 import { JobDetailsDrawer } from "@/components/dashboard/JobDetailsDrawer";
+import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
+import { PipelineAttemptsLog } from "@/components/dashboard/PipelineAttemptsLog";
 import { useServerFn } from "@tanstack/react-start";
 import { cancelJob, retryJob, runMockPipeline } from "@/lib/fir.functions";
 import { toast } from "sonner";
@@ -98,6 +100,12 @@ function DashboardHome() {
         ))}
       </div>
 
+      {/* Charts */}
+      <div className="mt-8">
+        <h2 className="label-uppercase mb-4">Analytics</h2>
+        <DashboardCharts jobs={jobs} />
+      </div>
+
       {/* Recent Cases */}
       <div className="mt-10">
         <h2 className="label-uppercase mb-4">Recent Cases</h2>
@@ -169,6 +177,14 @@ function DashboardHome() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Pipeline attempts log */}
+      <div className="mt-10">
+        <h2 className="label-uppercase mb-4">Pipeline Attempts {selectedJob ? `· ${selectedJob.fir_records?.case_number || ""}` : ""}</h2>
+        <div className="rounded-[4px] border border-border-subtle bg-card p-5">
+          <PipelineAttemptsLog jobId={selectedJobId} />
+        </div>
       </div>
 
       <JobDetailsDrawer
