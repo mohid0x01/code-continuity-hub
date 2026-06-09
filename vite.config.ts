@@ -13,3 +13,10 @@ export default defineConfig({
     server: { entry: "server" },
   },
 });
+
+// vite.config.ts
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+
+export default defineConfig({
+  plugins: [tanstackStart({ target: "vercel" })],
+});
