@@ -8,7 +8,13 @@ import {
   Settings,
   LogOut,
   Bell,
+  Sun,
+  Moon,
+  CheckCircle,
 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useTheme } from "@/hooks/useTheme";
+import { useJobsRealtime } from "@/hooks/useJobRealtime";
 
 const navItems = [
   { label: "Dashboard Overview", icon: LayoutDashboard, href: "/dashboard" },
@@ -70,6 +76,20 @@ export function DashboardSidebar() {
 }
 
 export function DashboardHeader() {
+  const { theme, toggle } = useTheme();
+  const jobs = useJobsRealtime();
+  const recent = jobs.slice(0, 6);
+  const unread = jobs.filter((j) => j.status === "completed" || j.status === "failed").length;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   return (
     <header className="flex items-center justify-between border-b border-subtle px-8 py-5">
       <div>
@@ -82,10 +102,63 @@ export function DashboardHeader() {
         </p>
       </div>
       <div className="flex items-center gap-4">
-        <button className="relative rounded-[4px] p-2 text-text-muted transition-colors hover:bg-surface hover:text-gold">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-gold gold-pulse" />
+        <button
+          onClick={toggle}
+          aria-label="Toggle theme"
+          className="rounded-[4px] p-2 text-text-muted transition-colors hover:bg-surface hover:text-gold"
+        >
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
+        <div ref={ref} className="relative">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="relative rounded-[4px] p-2 text-text-muted transition-colors hover:bg-surface hover:text-gold"
+          >
+            <Bell className="h-5 w-5" />
+            {unread > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-bold text-background gold-pulse">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
+          {open && (
+            <div className="absolute right-0 top-12 z-50 w-80 rounded-[6px] border border-border-subtle bg-card shadow-2xl">
+              <div className="border-b border-border-subtle px-4 py-3">
+                <h4 className="text-sm font-semibold text-text-primary">Notifications</h4>
+                <p className="text-[11px] text-text-muted">{recent.length} recent jobs</p>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {recent.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-xs text-text-muted">No activity yet</p>
+                ) : recent.map((j) => (
+                  <Link
+                    key={j.id}
+                    to={j.status === "completed" ? "/dashboard/viewer" : "/dashboard/processing"}
+                    search={{ jobId: j.id }}
+                    onClick={() => setOpen(false)}
+                    className="flex items-start gap-3 border-b border-border-subtle px-4 py-3 transition-colors hover:bg-surface"
+                  >
+                    {j.status === "completed" ? (
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                    ) : j.status === "failed" ? (
+                      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-destructive" />
+                    ) : (
+                      <span className="mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-blue-400" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] text-text-primary truncate">
+                        {j.fir_records?.case_number || j.id.slice(0, 8)}
+                      </div>
+                      <div className="text-[10px] text-text-muted">
+                        {j.status} · {new Date(j.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <div className="h-9 w-9 rounded-full bg-gold/20 text-center font-display text-sm font-bold leading-9 text-gold">
           KS
         </div>

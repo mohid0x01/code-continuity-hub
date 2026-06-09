@@ -110,6 +110,38 @@
   --sidebar-ring: oklch(0.65 0.20 255);
 }
 
+/* Light theme — applied when <html class="light"> */
+.light {
+  --background: oklch(0.98 0.005 240);
+  --foreground: oklch(0.18 0.01 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 240);
+  --primary: oklch(0.55 0.20 255);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0.005 240);
+  --secondary-foreground: oklch(0.18 0.01 240);
+  --muted: oklch(0.94 0.005 240);
+  --muted-foreground: oklch(0.45 0.012 240);
+  --accent: oklch(0.90 0.01 240);
+  --accent-foreground: oklch(0.18 0.01 240);
+  --border: oklch(0.88 0.005 240);
+  --input: oklch(0.96 0.005 240);
+  --ring: oklch(0.55 0.20 255);
+  --color-gold: oklch(0.55 0.20 255);
+  --color-gold-light: oklch(0.45 0.22 255);
+  --color-surface: oklch(0.96 0.005 240);
+  --color-surface-elevated: oklch(0.93 0.005 240);
+  --color-surface-overlay: oklch(0.90 0.006 240);
+  --color-text-primary: oklch(0.18 0.01 240);
+  --color-text-secondary: oklch(0.40 0.012 240);
+  --color-text-muted: oklch(0.55 0.012 240);
+  --color-border-subtle: oklch(0.88 0.005 240);
+  --color-border-accent: oklch(0.78 0.008 240);
+  --sidebar: oklch(0.97 0.005 240);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
