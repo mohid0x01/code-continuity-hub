@@ -11,12 +11,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
+    // Add your Vercel target directly into this existing configuration object
+    target: "vercel"
   },
-});
-
-// vite.config.ts
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-
-export default defineConfig({
-  plugins: [tanstackStart({ target: "vercel" })],
 });
