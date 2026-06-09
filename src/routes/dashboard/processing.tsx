@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, Loader, RotateCcw, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { retryJob, runMockPipeline } from "@/lib/fir.functions";
@@ -37,11 +37,11 @@ const STAGE_KEYS = [
 ] as const;
 
 const stages = [
-  { key: "preprocessing", title: "Preprocessing & Language Normalization", desc: "Detecting language, normalizing Roman Urdu transliterations" },
-  { key: "entity_extraction", title: "AI Entity & Event Extraction", desc: "Identifying actors, objects, locations, and temporal markers" },
-  { key: "spatial_resolution", title: "Spatial Coordinate Resolution", desc: "Mapping referenced locations to relative spatial positions" },
-  { key: "timeline_sequencing", title: "Timeline Sequencing & Validation", desc: "Ordering events chronologically and validating causal chains" },
-  { key: "scene_generation", title: "3D Scene Manifest Generation", desc: "Building the scene graph for interactive 3D rendering" },
+  { key: "preprocessing", title: "Stage 1 · Narrative Preprocessing", desc: "Loading FIR text, detecting language (English / Urdu / Roman Urdu / Sindhi)" },
+  { key: "entity_extraction", title: "Stage 2 · AI Entity & Event Extraction", desc: "Calling Lovable AI with fallback chain; structured tool-call output" },
+  { key: "spatial_resolution", title: "Stage 3 · Spatial Coordinate Resolution", desc: "Validating schema; resolving 3D positions for every entity" },
+  { key: "timeline_sequencing", title: "Stage 4 · Timeline Sequencing", desc: "Re-ordering events chronologically; linking to entities" },
+  { key: "scene_generation", title: "Stage 5 · 3D Scene Manifest", desc: "Building scene graph and persisting reconstruction" },
 ] as const;
 
 type Attempt = { model: string; ok: boolean; error?: string; ms: number };
@@ -61,6 +61,7 @@ function ProcessingPage() {
   const runPipelineFn = useServerFn(runMockPipeline);
   const [retrying, setRetrying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const currentStage = job ? stageMap[job.status] ?? -1 : -1;
   const isCompleted = job?.status === "completed";
@@ -102,6 +103,14 @@ function ProcessingPage() {
 
   const progressPct = isCompleted ? 100 : Math.max(0, ((currentStage + 1) / stages.length) * 100);
 
+  // Auto scroll to the error panel whenever the job transitions to failed
+  // (covers initial load AND retry-then-fail again).
+  useEffect(() => {
+    if (isFailed && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isFailed, job?.error_message]);
+
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
       <div className="fixed left-60 right-0 top-0 z-50 h-[2px] bg-border-subtle">
@@ -135,6 +144,7 @@ function ProcessingPage() {
 
         {isFailed && (
           <motion.div
+            ref={errorRef}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             className="mt-6 rounded-[4px] border border-destructive/40 bg-destructive/5 p-5"
@@ -146,6 +156,32 @@ function ProcessingPage() {
                 <p className="mt-1 break-words text-[13px] text-text-secondary">
                   {job?.error_message || "An error occurred while processing the FIR."}
                 </p>
+                {attempts.length > 0 && (
+                  <div className="mt-3 rounded-[3px] border border-destructive/20 bg-background/40 p-2">
+                    <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-text-muted">
+                      Fallback attempts ({attempts.length})
+                    </div>
+                    <div className="space-y-1">
+                      {attempts.map((a, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex items-center gap-2 font-mono text-[10px] ${
+                            a.ok ? "text-success" : "text-destructive"
+                          }`}
+                        >
+                          <span>{a.ok ? "✓" : "✗"}</span>
+                          <span className="flex-1 truncate">{a.model}</span>
+                          <span className="opacity-60">{(a.ms / 1000).toFixed(1)}s</span>
+                          {a.error && (
+                            <span className="ml-2 max-w-[40%] truncate opacity-70" title={a.error}>
+                              {a.error}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
