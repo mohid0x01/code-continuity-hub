@@ -130,6 +130,56 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_attempts: {
+        Row: {
+          attempt_number: number
+          created_at: string
+          error_message: string | null
+          id: string
+          job_id: string
+          latency_ms: number
+          model: string
+          officer_id: string
+          ok: boolean
+          stage: string
+          status_code: number | null
+        }
+        Insert: {
+          attempt_number?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_id: string
+          latency_ms?: number
+          model: string
+          officer_id: string
+          ok: boolean
+          stage: string
+          status_code?: number | null
+        }
+        Update: {
+          attempt_number?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_id?: string
+          latency_ms?: number
+          model?: string
+          officer_id?: string
+          ok?: boolean
+          stage?: string
+          status_code?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_attempts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "fir_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scene_entities: {
         Row: {
           color: string | null
