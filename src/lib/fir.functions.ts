@@ -412,7 +412,7 @@ export const runMockPipeline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { jobId: string }) => z.object({ jobId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
     const jobId = data.jobId;
     const startTime = Date.now();
 
@@ -459,6 +459,17 @@ export const runMockPipeline = createServerFn({ method: "POST" })
         fir.incident_type,
         async (attempt) => {
           attemptsAll.push(attempt);
+          // Persist attempt to pipeline_attempts table (best-effort, ignore errors).
+          await supabase.from("pipeline_attempts").insert({
+            job_id: jobId,
+            officer_id: userId,
+            stage: "entity_extraction",
+            model: attempt.model,
+            attempt_number: attemptsAll.length,
+            ok: attempt.ok,
+            error_message: attempt.error ?? null,
+            latency_ms: attempt.ms,
+          });
           // Live-publish attempt list so UI can show which providers were tried.
           await supabase
             .from("fir_jobs")
