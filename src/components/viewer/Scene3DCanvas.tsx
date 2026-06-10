@@ -1,5 +1,5 @@
-import { useRef, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useMemo, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
@@ -126,6 +126,23 @@ function MovementTrails({ entities, events }: { entities: SceneEntity[]; events:
   );
 }
 
+function ZoomBridge() {
+  const { camera } = useThree();
+  useEffect(() => {
+    const onZoom = (e: Event) => {
+      const dir = (e as CustomEvent).detail as "in" | "out";
+      const factor = dir === "in" ? 0.85 : 1.18;
+      camera.position.multiplyScalar(factor);
+      const dist = camera.position.length();
+      if (dist < 4) camera.position.setLength(4);
+      if (dist > 60) camera.position.setLength(60);
+    };
+    window.addEventListener("sceneiq:zoom", onZoom);
+    return () => window.removeEventListener("sceneiq:zoom", onZoom);
+  }, [camera]);
+  return null;
+}
+
 export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
   const actorEntities = entities.filter(e => e.entity_type === "actor" || e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
@@ -163,6 +180,8 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
       ))}
 
       <MovementTrails entities={entities} events={events} />
+
+      <ZoomBridge />
 
       <OrbitControls
         makeDefault
