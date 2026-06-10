@@ -28,7 +28,7 @@ export function DashboardSidebar() {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-subtle bg-[oklch(0.1_0.005_60)]">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-border bg-sidebar">
       <div className="px-5 py-5">
         <Link to="/dashboard">
           <SceneIQLogo />

@@ -178,7 +178,7 @@ function SceneViewer() {
     : jobId?.slice(0, 12) || "—";
 
   return (
-    <div className="-m-8 flex h-[calc(100vh-73px)] flex-col bg-[oklch(0.06_0.005_250)]">
+    <div className="-m-8 flex h-[calc(100vh-73px)] flex-col bg-background">
       {/* Top bar */}
       <div className="flex h-12 items-center justify-between border-b border-border-subtle bg-background px-4">
         <div className="flex items-center gap-3">
@@ -201,7 +201,7 @@ function SceneViewer() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}
         {leftOpen && (
-          <div className="w-[280px] shrink-0 overflow-y-auto border-r border-border-subtle bg-[oklch(0.1_0.005_60)] p-4">
+          <div className="w-[280px] shrink-0 overflow-y-auto border-r border-border bg-card p-4">
             <h3 className="label-uppercase mb-3">Scene Entities</h3>
             <div className="space-y-2">
               {[...actorEntities, ...vehicleEntities].map((e) => (
@@ -277,7 +277,7 @@ function SceneViewer() {
 
         {/* Right panel */}
         {rightOpen && (
-          <div className="w-[240px] shrink-0 overflow-y-auto border-l border-border-subtle bg-[oklch(0.1_0.005_60)] p-4">
+          <div className="w-[240px] shrink-0 overflow-y-auto border-l border-border bg-card p-4">
             <h3 className="label-uppercase mb-3">Reconstruction Data</h3>
 
             <div className="space-y-3">
