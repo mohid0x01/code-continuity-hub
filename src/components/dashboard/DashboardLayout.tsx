@@ -19,7 +19,7 @@ import { useJobsRealtime } from "@/hooks/useJobRealtime";
 const navItems = [
   { label: "Dashboard Overview", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Submit New FIR", icon: FilePlus, href: "/dashboard/submit" },
-  { label: "My Reconstructions", icon: Boxes, href: "/dashboard/viewer" },
+  { label: "My Reconstructions", icon: Boxes, href: "/dashboard/archive" },
   { label: "Case Archive", icon: Archive, href: "/dashboard/archive" },
   { label: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
