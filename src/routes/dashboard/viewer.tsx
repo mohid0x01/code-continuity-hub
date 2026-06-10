@@ -16,8 +16,11 @@ import {
   AlertTriangle,
   FileText,
   Loader,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { z } from "zod";
+import { toast } from "sonner";
 import { useSceneStore } from "@/stores/sceneStore";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +52,7 @@ function SceneViewer() {
   const [firText, setFirText] = useState<string>("");
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [showSource, setShowSource] = useState(false);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
@@ -60,6 +64,38 @@ function SceneViewer() {
   const setTotalEvents = useSceneStore((s) => s.setTotalEvents);
   const nextEvent = useSceneStore((s) => s.nextEvent);
   const prevEvent = useSceneStore((s) => s.prevEvent);
+
+  const handleDownload = useCallback(() => {
+    const payload = { job, entities, events, firText };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reconstruction-${jobId?.slice(0, 8) || "scene"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Reconstruction downloaded");
+  }, [job, entities, events, firText, jobId]);
+
+  const handleShare = useCallback(async () => {
+    const link = window.location.href;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copied to clipboard");
+    } catch {
+      toast.error("Could not copy link");
+    }
+  }, []);
+
+  const handleExpand = useCallback(() => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
+    else document.exitFullscreen?.().catch(() => {});
+  }, []);
+
+  const handleZoom = useCallback((dir: "in" | "out") => {
+    window.dispatchEvent(new CustomEvent("sceneiq:zoom", { detail: dir }));
+  }, []);
 
   // Fetch scene data when job completes
   useEffect(() => {
@@ -154,9 +190,11 @@ function SceneViewer() {
           {job?.status === "completed" ? "Scene Reconstruction" : `Pipeline: ${job?.status || "loading"}`}
         </span>
         <div className="flex items-center gap-2">
-          <button className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
-          <button className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Share2 className="h-4 w-4" /></button>
-          <button className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Expand className="h-4 w-4" /></button>
+          <button onClick={() => handleZoom("in")} title="Zoom in" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomIn className="h-4 w-4" /></button>
+          <button onClick={() => handleZoom("out")} title="Zoom out" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomOut className="h-4 w-4" /></button>
+          <button onClick={handleDownload} title="Download JSON" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
+          <button onClick={handleShare} title="Copy share link" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Share2 className="h-4 w-4" /></button>
+          <button onClick={handleExpand} title="Fullscreen" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Expand className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -270,9 +308,17 @@ function SceneViewer() {
               </div>
             )}
 
-            <button className="mt-6 flex w-full items-center justify-center gap-2 rounded-[4px] border border-border-accent py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-text-secondary transition-colors hover:border-gold hover:text-gold">
-              <FileText className="h-3.5 w-3.5" /> Source Text
+            <button
+              onClick={() => setShowSource((v) => !v)}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-[4px] border border-border-accent py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-text-secondary transition-colors hover:border-gold hover:text-gold"
+            >
+              <FileText className="h-3.5 w-3.5" /> {showSource ? "Hide" : "Show"} Source Text
             </button>
+            {showSource && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-[4px] border border-border-subtle bg-background/60 p-3 text-[11px] leading-relaxed text-text-secondary whitespace-pre-wrap">
+                {firText || "No FIR narrative available."}
+              </div>
+            )}
 
             <div className="mt-6 space-y-2 text-[11px] text-text-muted">
               <div>Model: <span className="font-mono text-text-secondary">{job?.llm_model || "—"}</span></div>
