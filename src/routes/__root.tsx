@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { TwinklingStars } from "@/components/effects/TwinklingStars";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -86,7 +85,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&family=Great+Vibes&family=Pacifico&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&family=Great+Vibes&display=swap",
       },
     ],
   }),
@@ -115,13 +114,8 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="relative min-h-screen bg-black">
-        <TwinklingStars density={200} />
-        <div className="pointer-events-none fixed inset-0 z-[1] global-grid" aria-hidden="true" />
-        <div className="pointer-events-none fixed inset-0 z-[2] global-vignette" aria-hidden="true" />
-        <div className="relative z-10">
-          <Outlet />
-        </div>
+      <div className="relative min-h-screen bg-background text-foreground">
+        <Outlet />
         <Toaster />
       </div>
     </QueryClientProvider>

@@ -654,3 +654,235 @@
   50% { transform: translateY(-4px); }
 }
 
+/* ============================================================
+   TeamCyberOps Grok-Style Monochrome Theme Override
+   Loaded last — wins over all earlier color/gradient tokens.
+   ============================================================ */
+
+@theme inline {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Default = Dark (pure black bg, pure white fg) */
+:root {
+  --background: hsl(0 0% 0%);
+  --foreground: hsl(0 0% 100%);
+  --card: hsl(0 0% 6%);
+  --card-foreground: hsl(0 0% 100%);
+  --popover: hsl(0 0% 6%);
+  --popover-foreground: hsl(0 0% 100%);
+  --primary: hsl(0 0% 95%);
+  --primary-foreground: hsl(0 0% 0%);
+  --secondary: hsl(0 0% 12%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(0 0% 10%);
+  --muted-foreground: hsl(0 0% 70%);
+  --accent: hsl(0 0% 14%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 72% 55%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(0 0% 14%);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(0 0% 80%);
+  --sidebar: hsl(0 0% 4%);
+  --sidebar-foreground: hsl(0 0% 100%);
+  --sidebar-primary: hsl(0 0% 95%);
+  --sidebar-primary-foreground: hsl(0 0% 0%);
+  --sidebar-accent: hsl(0 0% 12%);
+  --sidebar-accent-foreground: hsl(0 0% 100%);
+  --sidebar-border: hsl(0 0% 14%);
+  --sidebar-ring: hsl(0 0% 80%);
+
+  /* Map legacy "gold" / "platinum" / surface tokens to monochrome */
+  --color-gold: hsl(0 0% 100%);
+  --color-gold-light: hsl(0 0% 100%);
+  --color-gold-muted: hsl(0 0% 70%);
+  --color-gold-dim: hsl(0 0% 100% / 40%);
+  --color-platinum: hsl(0 0% 100%);
+  --color-ice: hsl(0 0% 90%);
+  --color-surface: hsl(0 0% 6%);
+  --color-surface-elevated: hsl(0 0% 10%);
+  --color-surface-overlay: hsl(0 0% 14%);
+  --color-text-primary: hsl(0 0% 100%);
+  --color-text-secondary: hsl(0 0% 75%);
+  --color-text-muted: hsl(0 0% 55%);
+  --color-border-subtle: hsl(0 0% 14%);
+  --color-border-accent: hsl(0 0% 20%);
+}
+
+.light {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(0 0% 0%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(0 0% 0%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0 0% 0%);
+  --primary: hsl(0 0% 10%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(0 0% 92%);
+  --secondary-foreground: hsl(0 0% 0%);
+  --muted: hsl(0 0% 96%);
+  --muted-foreground: hsl(0 0% 35%);
+  --accent: hsl(0 0% 90%);
+  --accent-foreground: hsl(0 0% 10%);
+  --destructive: hsl(0 72% 50%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(0 0% 90%);
+  --input: hsl(0 0% 92%);
+  --ring: hsl(0 0% 20%);
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(0 0% 0%);
+  --sidebar-accent: hsl(0 0% 94%);
+  --sidebar-accent-foreground: hsl(0 0% 0%);
+  --sidebar-border: hsl(0 0% 90%);
+
+  --color-gold: hsl(0 0% 0%);
+  --color-gold-light: hsl(0 0% 0%);
+  --color-gold-muted: hsl(0 0% 35%);
+  --color-gold-dim: hsl(0 0% 0% / 40%);
+  --color-platinum: hsl(0 0% 0%);
+  --color-ice: hsl(0 0% 10%);
+  --color-surface: hsl(0 0% 96%);
+  --color-surface-elevated: hsl(0 0% 92%);
+  --color-surface-overlay: hsl(0 0% 88%);
+  --color-text-primary: hsl(0 0% 0%);
+  --color-text-secondary: hsl(0 0% 25%);
+  --color-text-muted: hsl(0 0% 45%);
+  --color-border-subtle: hsl(0 0% 90%);
+  --color-border-accent: hsl(0 0% 78%);
+}
+
+/* Flatten every glass / gradient surface to a plain mono panel */
+.glass-button,
+.glass-button-primary,
+.glass-button-destructive,
+.glass-panel,
+.shine-badge,
+.table-glass,
+.table-glass thead,
+.glass-card,
+[data-slot="card"],
+[data-slot="dialog-content"],
+[data-slot="sheet-content"],
+[data-slot="alert-dialog-content"],
+[data-slot="drawer-content"],
+[data-slot="popover-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="select-content"],
+[data-slot="command"],
+[data-slot="hover-card-content"],
+[data-slot="menubar-content"],
+[data-slot="context-menu-content"],
+[data-slot="navigation-menu-content"],
+[data-slot="tooltip-content"],
+[role="dialog"][data-state],
+[data-sidebar="sidebar"] {
+  background: var(--card) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.5) !important;
+  color: var(--foreground);
+}
+
+.glass-button {
+  color: var(--foreground) !important;
+}
+.glass-button:hover,
+.glass-panel:hover,
+[data-slot="card"]:hover {
+  background: var(--accent) !important;
+  border-color: var(--ring) !important;
+  transform: none !important;
+  box-shadow: 0 2px 8px hsl(0 0% 0% / 0.5) !important;
+}
+
+.glass-button-primary {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-color: var(--primary) !important;
+}
+.glass-button-primary:hover {
+  background: var(--foreground) !important;
+  color: var(--background) !important;
+  transform: none !important;
+}
+
+.glass-button-destructive {
+  background: hsl(0 72% 55% / 0.12) !important;
+  color: hsl(0 72% 60%) !important;
+  border-color: hsl(0 72% 55% / 0.4) !important;
+}
+
+/* Flat inputs */
+.glass-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+textarea,
+[data-slot="select-trigger"],
+button[role="combobox"] {
+  background: var(--input) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+.glass-input:focus,
+input:focus,
+textarea:focus,
+[data-slot="select-trigger"]:focus,
+button[role="combobox"]:focus {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25) !important;
+}
+.glass-input::before,
+input::before,
+textarea::before {
+  display: none !important;
+}
+
+/* Disable decorative noise / gradient text */
+.text-gradient-gold,
+.text-gradient,
+.text-gradient-purple {
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--foreground) !important;
+  animation: none !important;
+}
+
+.global-grid,
+.global-vignette,
+.noise-overlay::after,
+.gold-glow,
+.shine-badge::before,
+.shimmer {
+  background: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+.gold-divider {
+  background: var(--border) !important;
+}
+.gold-top-border { border-top-color: var(--foreground) !important; }
+.gold-left-border { border-left-color: var(--foreground) !important; }
+
+.icon-hover:hover,
+.icon-glow-hover:hover {
+  filter: none !important;
+  transform: scale(1.08) !important;
+  color: var(--foreground) !important;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--foreground);
+  color: var(--background);
+}

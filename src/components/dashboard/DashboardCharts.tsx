@@ -12,7 +12,10 @@ interface Job {
   fir_records?: { district?: string | null; incident_type?: string | null } | null;
 }
 
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4"];
+// Monochrome palette — grayscale only per theme guide
+const COLORS = ["#ffffff", "#cccccc", "#999999", "#666666", "#444444", "#222222"];
+const FG = "#ffffff";
+const TOOLTIP_STYLE = { background: "#0a0a0a", border: "1px solid #262626", borderRadius: 6, color: "#fff" } as const;
 
 export function DashboardCharts({ jobs }: { jobs: Job[] }) {
   const trend = useMemo(() => {
@@ -58,20 +61,20 @@ export function DashboardCharts({ jobs }: { jobs: Job[] }) {
           <AreaChart data={trend}>
             <defs>
               <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.6} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                <stop offset="0%" stopColor={FG} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={FG} stopOpacity={0} />
               </linearGradient>
               <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.6} />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                <stop offset="0%" stopColor="#888" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#888" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="rgba(255,255,255,0.05)" />
             <XAxis dataKey="day" stroke="#888" fontSize={11} />
             <YAxis stroke="#888" fontSize={11} allowDecimals={false} />
-            <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 6 }} />
-            <Area type="monotone" dataKey="jobs" stroke="#3b82f6" fill="url(#g1)" strokeWidth={2} />
-            <Area type="monotone" dataKey="completed" stroke="#22c55e" fill="url(#g2)" strokeWidth={2} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Area type="monotone" dataKey="jobs" stroke={FG} fill="url(#g1)" strokeWidth={2} />
+            <Area type="monotone" dataKey="completed" stroke="#888" fill="url(#g2)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -86,7 +89,7 @@ export function DashboardCharts({ jobs }: { jobs: Job[] }) {
               <Pie data={byDistrict} dataKey="value" nameKey="name" outerRadius={70} innerRadius={40}>
                 {byDistrict.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 6 }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -103,8 +106,8 @@ export function DashboardCharts({ jobs }: { jobs: Job[] }) {
               <CartesianGrid stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="name" stroke="#888" fontSize={11} />
               <YAxis stroke="#888" fontSize={11} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 6 }} />
-              <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Bar dataKey="count" fill={FG} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
