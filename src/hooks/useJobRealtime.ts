@@ -4,11 +4,20 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type FirJob = Tables<"fir_jobs">;
 
+function createRealtimeChannelName(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useJobRealtime(jobId: string | null) {
   const [job, setJob] = useState<FirJob | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
+    let active = true;
 
     // Initial fetch
     supabase
@@ -17,11 +26,12 @@ export function useJobRealtime(jobId: string | null) {
       .eq("id", jobId)
       .single()
       .then(({ data }) => {
-        if (data) setJob(data);
+        if (active && data) setJob(data);
       });
 
+    const channelName = createRealtimeChannelName(`job-${jobId}`);
     const channel = supabase
-      .channel(`job-${jobId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -37,6 +47,7 @@ export function useJobRealtime(jobId: string | null) {
       .subscribe();
 
     return () => {
+      active = false;
       supabase.removeChannel(channel);
     };
   }, [jobId]);
@@ -48,17 +59,20 @@ export function useJobsRealtime() {
   const [jobs, setJobs] = useState<(FirJob & { fir_records: { case_number: string; district: string; incident_type: string } | null })[]>([]);
 
   useEffect(() => {
+    let active = true;
+
     supabase
       .from("fir_jobs")
       .select("*, fir_records(case_number, district, incident_type)")
       .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data }) => {
-        if (data) setJobs(data as typeof jobs);
+        if (active && data) setJobs(data as typeof jobs);
       });
 
+    const channelName = createRealtimeChannelName("all-jobs");
     const channel = supabase
-      .channel("all-jobs")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -73,12 +87,13 @@ export function useJobsRealtime() {
             .select("*, fir_records(case_number, district, incident_type)")
             .order("created_at", { ascending: false })
             .limit(50);
-          if (data) setJobs(data as typeof jobs);
+          if (active && data) setJobs(data as typeof jobs);
         }
       )
       .subscribe();
 
     return () => {
+      active = false;
       supabase.removeChannel(channel);
     };
   }, []);
