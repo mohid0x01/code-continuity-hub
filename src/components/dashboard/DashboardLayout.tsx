@@ -11,10 +11,13 @@ import {
   Sun,
   Moon,
   CheckCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/hooks/useTheme";
 import { useJobsRealtime } from "@/hooks/useJobRealtime";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "@tanstack/react-router";
 
 const navItems = [
   { label: "Dashboard Overview", icon: LayoutDashboard, href: "/dashboard" },
@@ -26,6 +29,20 @@ const navItems = [
 
 export function DashboardSidebar() {
   const location = useLocation();
+  const [email, setEmail] = useState<string>("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) setEmail(data.user.email);
+    });
+  }, []);
+
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await supabase.auth.signOut();
+    navigate({ to: "/login" });
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-border bg-sidebar">
@@ -33,11 +50,18 @@ export function DashboardSidebar() {
         <Link to="/dashboard">
           <SceneIQLogo />
         </Link>
-        <div className="mt-4 rounded-[4px] border border-border-accent bg-surface p-3">
-          <div className="text-sm font-semibold text-text-primary">ASI Karim Shah</div>
-          <div className="mt-1 font-mono text-[11px] text-gold">Badge #SHK-2847</div>
-          <div className="mt-1 inline-block rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-gold">
-            Khairpur District
+        <div className="mt-4 rounded-[6px] border border-gold/20 bg-gold/[0.04] p-3">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-gold" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold">
+              SuperAdmin
+            </span>
+          </div>
+          <div className="mt-1.5 truncate font-mono text-[11px] text-text-secondary" title={email}>
+            {email || "—"}
+          </div>
+          <div className="mt-1.5 inline-block rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-success">
+            ● Active session
           </div>
         </div>
       </div>
@@ -63,13 +87,13 @@ export function DashboardSidebar() {
       </nav>
 
       <div className="px-3 pb-5">
-        <Link
-          to="/"
-          className="flex items-center gap-3 rounded-[4px] px-3 py-2.5 text-[13px] text-text-muted transition-colors hover:text-destructive"
+        <button
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-3 rounded-[4px] px-3 py-2.5 text-left text-[13px] text-text-muted transition-colors hover:text-destructive"
         >
           <LogOut className="h-4 w-4" />
           Sign Out
-        </Link>
+        </button>
       </div>
     </aside>
   );
@@ -81,6 +105,7 @@ export function DashboardHeader() {
   const recent = jobs.slice(0, 6);
   const unread = jobs.filter((j) => j.status === "completed" || j.status === "failed").length;
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string>("Administrator");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -89,16 +114,30 @@ export function DashboardHeader() {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) setEmail(data.user.email.split("@")[0]);
+    });
+  }, []);
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  })();
 
   return (
     <header className="flex items-center justify-between border-b border-subtle px-8 py-5">
       <div>
         <h1 className="font-display text-3xl font-bold text-text-primary">
-          Good morning, Officer Karim
+          {greeting}, <span className="text-gold">{email}</span>
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Khairpur District ·{" "}
-          <span className="font-mono text-gold">{new Date().toLocaleDateString("en-PK", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
+          Government of Pakistan · SCENEIQ Admin ·{" "}
+          <span className="font-mono text-gold">
+            {new Date().toLocaleDateString("en-PK", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </span>
         </p>
       </div>
       <div className="flex items-center gap-4">
@@ -159,8 +198,8 @@ export function DashboardHeader() {
             </div>
           )}
         </div>
-        <div className="h-9 w-9 rounded-full bg-gold/20 text-center font-display text-sm font-bold leading-9 text-gold">
-          KS
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 font-display text-sm font-bold text-gold uppercase">
+          {email.slice(0, 2)}
         </div>
       </div>
     </header>
