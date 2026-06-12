@@ -3,8 +3,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const submitFirSchema = z.object({
-  caseNumber: z.string().min(1).max(50),
-  district: z.string().min(1).max(100),
+  // case_number is auto-generated server-side via DB default. Caller MUST NOT send it.
+  city: z.string().min(1).max(100),
+  area: z.string().min(1).max(200),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  formattedAddress: z.string().min(1).max(500),
   incidentDate: z.string().nullable(),
   incidentType: z.enum(["theft", "assault", "vehicular", "property", "kidnapping", "robbery", "other"]),
   narrative: z.string().min(10).max(50000),
@@ -19,14 +23,19 @@ export const submitFir = createServerFn({ method: "POST" })
     const { data: fir, error: firError } = await supabase
       .from("fir_records")
       .insert({
-        case_number: data.caseNumber,
-        district: data.district,
+        // case_number left to DB default (generate_case_number)
+        district: data.city, // legacy column kept in sync with city for back-compat
+        city: data.city,
+        area: data.area,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        formatted_address: data.formattedAddress,
         incident_date: data.incidentDate || null,
         incident_type: data.incidentType,
         raw_narrative: data.narrative,
         officer_id: userId,
       })
-      .select("id")
+      .select("id, case_number")
       .single();
 
     if (firError) throw new Error(`Failed to create FIR: ${firError.message}`);
@@ -44,7 +53,7 @@ export const submitFir = createServerFn({ method: "POST" })
 
     if (jobError) throw new Error(`Failed to create job: ${jobError.message}`);
 
-    return { firId: fir.id, jobId: job.id };
+    return { firId: fir.id, jobId: job.id, caseNumber: fir.case_number };
   });
 
 export const getJobStatus = createServerFn({ method: "POST" })
