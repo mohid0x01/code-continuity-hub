@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { submitFir, runMockPipeline } from "@/lib/fir.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
+import { Lock, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/submit")({
   component: SubmitFIR,
 });
 
-const districts = ["Khairpur", "Sukkur", "Larkana", "Hyderabad", "Karachi South", "Karachi East", "Thatta", "Dadu", "Nawabshah"];
 const incidentTypes = [
   { label: "Theft", value: "theft" },
   { label: "Assault", value: "assault" },
@@ -19,7 +20,14 @@ const incidentTypes = [
   { label: "Robbery", value: "robbery" },
   { label: "Other", value: "other" },
 ] as const;
-const pipelineStages = ["Preprocessing", "Entity Extraction", "Spatial Resolution", "Timeline Sequencing", "Scene Generation"];
+const pipelineStages = [
+  "Preprocessing",
+  "Entity Extraction",
+  "Spatial Resolution",
+  "Timeline Sequencing",
+  "Scene Generation",
+  "Video Render",
+];
 const tips = [
   "Include all actor descriptions as stated",
   "Mention locations by name or landmark",
@@ -30,13 +38,21 @@ const tips = [
 
 function SubmitFIR() {
   const [narrative, setNarrative] = useState("");
-  const [caseNumber, setCaseNumber] = useState("FIR-2024-SHK-00143");
-  const [district, setDistrict] = useState("Khairpur");
+  const [previewCaseNumber, setPreviewCaseNumber] = useState("FIR-2026-XXXXXX");
+  const [location, setLocation] = useState<PickedLocation | null>(null);
   const [incidentDate, setIncidentDate] = useState("");
   const [incidentType, setIncidentType] = useState<typeof incidentTypes[number]["value"]>("assault");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Show a preview of the next case number (purely cosmetic — real number is
+  // assigned by the database when the row is inserted).
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    const rand = String(Math.floor(100000 + Math.random() * 900000));
+    setPreviewCaseNumber(`FIR-${year}-${rand}`);
+  }, []);
 
   const submitFirFn = useServerFn(submitFir);
   const runPipelineFn = useServerFn(runMockPipeline);
@@ -45,6 +61,10 @@ function SubmitFIR() {
     e.preventDefault();
     if (narrative.length < 10) {
       setError("Narrative must be at least 10 characters.");
+      return;
+    }
+    if (!location) {
+      setError("Please pick a city and area from the map suggestions.");
       return;
     }
 
@@ -60,8 +80,11 @@ function SubmitFIR() {
 
       const result = await submitFirFn({
         data: {
-          caseNumber,
-          district,
+          city: location.city,
+          area: location.area,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          formattedAddress: location.formattedAddress,
           incidentDate: incidentDate || null,
           incidentType,
           narrative,
@@ -87,7 +110,12 @@ function SubmitFIR() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="font-display text-3xl font-bold text-text-primary">Submit FIR for Reconstruction</h1>
+        <h1 className="font-display text-3xl font-bold text-text-primary">
+          New Incident Reconstruction
+        </h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          AI will extract entities, build a 3D scene, and render a video re-enactment.
+        </p>
         <div className="gold-divider mt-2" style={{ width: "60px" }} />
 
         {error && (
@@ -97,27 +125,31 @@ function SubmitFIR() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">Case Number</label>
+          {/* Auto case number — read-only */}
+          <div>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">
+              <Lock className="h-3 w-3" /> Case Number (Auto-generated)
+            </label>
+            <div className="relative mt-2">
               <input
                 type="text"
-                value={caseNumber}
-                onChange={(e) => setCaseNumber(e.target.value)}
-                className="mt-2 w-full rounded-[2px] border border-border-accent bg-input px-4 py-3 font-mono text-sm text-gold placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+                value={previewCaseNumber}
+                readOnly
+                aria-readonly
+                tabIndex={-1}
+                className="glass-input w-full cursor-not-allowed rounded-[6px] px-4 py-3 pr-24 font-mono text-sm text-gold"
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-success/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-success">
+                Auto
+              </span>
             </div>
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">District</label>
-              <select
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="mt-2 w-full rounded-[2px] border border-border-accent bg-input px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
-              >
-                {districts.map(d => <option key={d}>{d}</option>)}
-              </select>
-            </div>
+            <p className="mt-1.5 text-[10px] text-text-muted">
+              Final case number is assigned by the system at submission. Preview shown above.
+            </p>
           </div>
+
+          {/* Location: Google Maps cascading picker */}
+          <LocationPicker onChange={setLocation} />
 
           <div className="grid gap-5 md:grid-cols-2">
             <div>
@@ -126,7 +158,7 @@ function SubmitFIR() {
                 type="date"
                 value={incidentDate}
                 onChange={(e) => setIncidentDate(e.target.value)}
-                className="mt-2 w-full rounded-[2px] border border-border-accent bg-input px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+                className="glass-input mt-2 w-full rounded-[6px] px-4 py-3 text-sm text-text-primary"
               />
             </div>
             <div>
@@ -134,7 +166,7 @@ function SubmitFIR() {
               <select
                 value={incidentType}
                 onChange={(e) => setIncidentType(e.target.value as typeof incidentType)}
-                className="mt-2 w-full rounded-[2px] border border-border-accent bg-input px-4 py-3 text-sm text-text-primary focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+                className="glass-input mt-2 w-full rounded-[6px] px-4 py-3 text-sm text-text-primary"
               >
                 {incidentTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -149,7 +181,7 @@ function SubmitFIR() {
                 onChange={(e) => setNarrative(e.target.value)}
                 rows={10}
                 placeholder="Enter the full FIR narrative here. Roman Urdu and English both supported. Example: Mulzim Ahmed ne raat 11 baje Bazaar Road par victim Imran ko loha rod se mara..."
-                className="w-full resize-none rounded-[2px] border border-border-accent bg-[oklch(0.11_0.005_60)] px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-muted focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+                className="glass-input w-full resize-none rounded-[6px] px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-muted"
               />
               <span className="absolute bottom-3 right-3 font-mono text-[11px] text-text-muted">
                 {narrative.length} chars
@@ -159,12 +191,16 @@ function SubmitFIR() {
 
           <motion.button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !location}
             className="glass-button-primary w-full rounded-[6px] py-3.5 text-[13px] font-semibold uppercase tracking-[0.1em] disabled:opacity-50 disabled:cursor-not-allowed"
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
           >
-            {submitting ? "Submitting..." : "Process FIR →"}
+            {submitting ? "Submitting…" : (
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> Reconstruct Scene
+              </span>
+            )}
           </motion.button>
         </form>
       </motion.div>

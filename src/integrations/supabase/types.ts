@@ -27,6 +27,8 @@ export type Database = {
           scene_manifest: Json | null
           status: Database["public"]["Enums"]["job_status"]
           updated_at: string
+          video_status: string | null
+          video_url: string | null
         }
         Insert: {
           created_at?: string
@@ -40,6 +42,8 @@ export type Database = {
           scene_manifest?: Json | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
+          video_status?: string | null
+          video_url?: string | null
         }
         Update: {
           created_at?: string
@@ -53,6 +57,8 @@ export type Database = {
           scene_manifest?: Json | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
+          video_status?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -66,32 +72,47 @@ export type Database = {
       }
       fir_records: {
         Row: {
+          area: string | null
           case_number: string
+          city: string | null
           created_at: string
           district: string
+          formatted_address: string | null
           id: string
           incident_date: string | null
           incident_type: Database["public"]["Enums"]["incident_type"]
+          latitude: number | null
+          longitude: number | null
           officer_id: string
           raw_narrative: string
         }
         Insert: {
-          case_number: string
+          area?: string | null
+          case_number?: string
+          city?: string | null
           created_at?: string
           district: string
+          formatted_address?: string | null
           id?: string
           incident_date?: string | null
           incident_type?: Database["public"]["Enums"]["incident_type"]
+          latitude?: number | null
+          longitude?: number | null
           officer_id: string
           raw_narrative: string
         }
         Update: {
+          area?: string | null
           case_number?: string
+          city?: string | null
           created_at?: string
           district?: string
+          formatted_address?: string | null
           id?: string
           incident_date?: string | null
           incident_type?: Database["public"]["Enums"]["incident_type"]
+          latitude?: number | null
+          longitude?: number | null
           officer_id?: string
           raw_narrative?: string
         }
@@ -308,14 +329,43 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_case_number: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "superadmin"
       entity_role: "suspect" | "victim" | "witness" | "bystander"
       entity_type: "actor" | "vehicle" | "location" | "object"
       incident_type:
@@ -462,6 +512,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["superadmin"],
       entity_role: ["suspect", "victim", "witness", "bystander"],
       entity_type: ["actor", "vehicle", "location", "object"],
       incident_type: [
