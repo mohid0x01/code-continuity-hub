@@ -1,159 +1,118 @@
 import { motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Play, Sparkles, Shield, Zap, Globe } from "lucide-react";
-import { GoldDivider } from "@/components/GoldDivider";
-import heroImage from "@/assets/hero-officer.jpg";
+import { ArrowRight, Sparkles, ShieldCheck, Cpu, Video } from "lucide-react";
+import { PakGovEmblem } from "@/components/PakGovEmblem";
 
-const stats = [
-  { icon: Zap, label: "Avg. Render", value: "< 30s" },
-  { icon: Shield, label: "Provinces", value: "4" },
-  { icon: Globe, label: "Languages", value: "EN · UR" },
+const pillStats = [
+  { icon: Cpu, label: "AI Scene Engine" },
+  { icon: Video, label: "10s 3D Video" },
+  { icon: ShieldCheck, label: "SuperAdmin Secured" },
 ];
 
 export function HeroSection() {
   return (
-    <section id="home" className="relative flex min-h-screen items-center overflow-hidden pt-16">
-      {/* Background image */}
-      <div className="absolute inset-0">
-        <img
-          src={heroImage}
-          alt="Officer silhouette"
-          className="absolute right-0 top-0 h-full w-full object-cover object-right md:w-[60%]"
-          width={960}
-          height={1080}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/98 to-background/40 md:via-background/95" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
-      </div>
+    <section id="home" className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
+      <div className="absolute inset-0 bg-[oklch(0.05_0_0)]" />
+      <div
+        className="absolute inset-0 opacity-[0.18]"
+        style={{ backgroundImage: "radial-gradient(circle at 50% 50%, oklch(0.78 0.16 155 / 0.35), transparent 55%)" }}
+      />
+      <div
+        className="absolute inset-0 opacity-[0.07]"
+        style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.6) 1px, transparent 1px)", backgroundSize: "32px 32px" }}
+      />
+      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-background to-transparent" />
 
-
-      {/* Floating particles */}
-      {[...Array(12)].map((_, i) => (
+      {[...Array(8)].map((_, i) => (
         <motion.div
           key={i}
-          className="absolute rounded-full bg-gold/30"
-          style={{
-            width: 2 + (i % 4),
-            height: 2 + (i % 4),
-            left: `${(i * 8 + 10) % 90}%`,
-            top: `${(i * 13 + 15) % 85}%`,
-          }}
-          animate={{
-            y: [0, -40, 0],
-            opacity: [0.15, 0.7, 0.15],
-          }}
-          transition={{ repeat: Infinity, duration: 4 + (i % 4), ease: "easeInOut", delay: i * 0.4 }}
+          className="absolute h-1 w-1 rounded-full bg-emerald-400/40"
+          style={{ left: `${(i * 17 + 8) % 95}%`, top: `${(i * 13 + 20) % 80}%` }}
+          animate={{ y: [0, -20, 0], opacity: [0.2, 0.6, 0.2] }}
+          transition={{ duration: 4 + i, repeat: Infinity, delay: i * 0.3 }}
         />
       ))}
 
-      <div className="relative z-10 mx-auto max-w-7xl px-6 py-20">
+      <div className="relative z-10 mx-auto max-w-5xl px-6 text-center">
         <motion.div
-          className="max-w-full px-2 md:max-w-[60%] md:px-0"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: 0.6 }}
+          className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-1.5 backdrop-blur-md"
         >
-          {/* Shine badge */}
-          <motion.div
-            className="shine-badge inline-flex items-center gap-2 rounded-full px-4 py-1.5"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-gold" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold-light">
-              Powered by AI · For Pakistan Law Enforcement
-            </span>
-          </motion.div>
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
+            Pakistan Govt · Live Pilot
+          </span>
+          <PakGovEmblem size={16} />
+        </motion.div>
 
-          <GoldDivider />
+        <motion.h1
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.1 }}
+          className="font-display mx-auto mt-8 max-w-4xl text-5xl font-bold leading-[1.05] tracking-tight text-white md:text-7xl"
+        >
+          The AI that turns every FIR into a{" "}
+          <span className="bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-200 bg-clip-text text-transparent">
+            3D crime scene
+          </span>
+        </motion.h1>
 
-          <motion.h1
-            className="font-display text-4xl font-bold leading-[1.05] md:text-6xl lg:text-[72px]"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.7 }}
-          >
-            <span className="text-text-primary">We Turn Unstructured </span>
-            <span className="text-gradient-gold font-curly font-normal italic tracking-wide">FIR Text</span>
-            <span className="text-text-primary"> Into Visual </span>
-            <span className="text-gradient-gold font-curly font-normal italic tracking-wide">Crime Reconstructions</span>
-          </motion.h1>
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.25 }}
+          className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-text-secondary md:text-lg"
+        >
+          SceneIQ ingests an FIR narrative, extracts every actor, vehicle, and event,
+          then renders a photoreal 10-second incident video pinned to real Pakistan
+          coordinates — in under a minute.
+        </motion.p>
 
-          <motion.p
-            className="mt-6 max-w-[520px] text-lg leading-relaxed text-text-secondary"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="mt-10 flex flex-wrap items-center justify-center gap-3"
+        >
+          <Link
+            to="/login"
+            className="group inline-flex items-center gap-2 rounded-[10px] bg-white px-6 py-3 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
           >
-            Upload any FIR narrative. Our AI extracts every actor, location, and event — and renders a 3D animated scene reconstruction in under 30 seconds.
-          </motion.p>
+            <Sparkles className="h-4 w-4" />
+            Open SuperAdmin Console
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+          <a
+            href="#features"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-white/15 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/[0.08]"
+          >
+            See how it works
+          </a>
+        </motion.div>
 
-          <motion.div
-            className="mt-10 flex flex-wrap gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-          >
-            <Link to="/dashboard">
-              <motion.button
-                className="glass-button-primary group flex items-center gap-2 rounded-[6px] px-8 py-3 text-[13px] font-semibold uppercase tracking-[0.1em]"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Access Portal
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </motion.button>
-            </Link>
-            <motion.button
-              className="glass-button group flex items-center gap-2 rounded-[6px] px-8 py-3 text-[13px] font-semibold uppercase tracking-[0.1em]"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
+          className="mt-14 flex flex-wrap items-center justify-center gap-3"
+        >
+          {pillStats.map((s) => (
+            <motion.div
+              key={s.label}
+              whileHover={{ y: -2 }}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[12px] text-text-secondary backdrop-blur-md"
             >
-              <Play className="h-4 w-4 transition-transform group-hover:scale-110" /> Watch Demo
-            </motion.button>
-          </motion.div>
-
-          {/* Stats row */}
-          <motion.div
-            className="mt-12 grid max-w-md grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.85 }}
-          >
-            {stats.map((s, i) => (
-              <motion.div
-                key={s.label}
-                className="glass-card rounded-lg p-4"
-                whileHover={{ y: -4, scale: 1.03 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <s.icon className="mb-2 h-4 w-4 text-gold icon-float" style={{ animationDelay: `${i * 0.4}s` }} />
-                <div className="font-display text-xl font-bold text-text-primary">{s.value}</div>
-                <div className="text-[9px] uppercase tracking-[0.15em] text-text-muted">{s.label}</div>
-              </motion.div>
-            ))}
-          </motion.div>
-
-          <motion.p
-            className="mt-8 text-[12px] text-text-muted"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 }}
-          >
-            Developed for Shah Abdul Latif University · Institute of Computer Science
-          </motion.p>
+              <s.icon className="h-3.5 w-3.5 text-emerald-400" />
+              {s.label}
+            </motion.div>
+          ))}
         </motion.div>
       </div>
-
-      {/* Scroll indicator */}
-      <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        animate={{ y: [0, 8, 0] }}
-        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-      >
-        <div className="h-8 w-[1px] bg-gradient-to-b from-gold/60 to-transparent" />
-      </motion.div>
     </section>
   );
 }
