@@ -190,6 +190,43 @@ function SceneViewer() {
     ? ((job as Record<string, unknown>).fir_records as Record<string, string>)?.case_number
     : jobId?.slice(0, 12) || "—";
 
+  const firRec = (job as Record<string, unknown>)?.fir_records as Record<string, unknown> | undefined;
+  const firId = firRec?.id as string | undefined;
+  const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
+  const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
+
+  const handleGenerateVideo = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      await queueVideoFn({ data: { jobId } });
+      await logFn({ data: { action: "video.queue", entityType: "fir_job", entityId: jobId } }).catch(() => {});
+      toast.success("AI video queued — 10s 3D incident clip will appear when ready");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to queue video");
+    }
+  }, [jobId, queueVideoFn, logFn]);
+
+  const handlePdfExport = useCallback(async () => {
+    if (!firRec) { toast.error("FIR data not loaded yet"); return; }
+    exportCourtReportPDF({
+      caseNumber: String(caseNumber),
+      incidentType: (firRec.incident_type as string) ?? null,
+      incidentDate: (firRec.incident_date as string) ?? null,
+      city: (firRec.city as string) ?? null,
+      area: (firRec.area as string) ?? null,
+      formattedAddress: (firRec.formatted_address as string) ?? null,
+      latitude: (firRec.latitude as number) ?? null,
+      longitude: (firRec.longitude as number) ?? null,
+      narrative: firText || ((firRec.raw_narrative as string) ?? ""),
+      entities: entities.map((e) => ({ label: e.label, entity_type: e.entity_type, entity_role: e.entity_role, confidence: e.confidence })),
+      events: events.map((e) => ({ sequence_number: e.sequence_number, description: e.description, action_label: e.action_label })),
+      videoUrl: videoUrl ?? null,
+      createdAt: new Date().toISOString(),
+    });
+    await logFn({ data: { action: "report.export_pdf", entityType: "fir_job", entityId: jobId ?? null, metadata: { caseNumber: String(caseNumber) } } }).catch(() => {});
+    toast.success("Court report PDF downloaded");
+  }, [firRec, firText, entities, events, caseNumber, jobId, videoUrl, logFn]);
+
   return (
     <div className="-m-8 flex h-[calc(100vh-73px)] flex-col bg-background">
       {/* Top bar */}
