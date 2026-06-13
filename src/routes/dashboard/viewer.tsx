@@ -18,6 +18,11 @@ import {
   Loader,
   ZoomIn,
   ZoomOut,
+  Film,
+  Paperclip,
+  Box,
+  FileDown,
+  Sparkles,
 } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,6 +30,11 @@ import { useSceneStore } from "@/stores/sceneStore";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useServerFn } from "@tanstack/react-start";
+import { queueVideoGeneration } from "@/lib/video.functions";
+import { logAuditEvent } from "@/lib/audit.functions";
+import { exportCourtReportPDF } from "@/lib/pdf-export";
+import { EvidenceManager } from "@/components/EvidenceManager";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -53,6 +63,9 @@ function SceneViewer() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [showSource, setShowSource] = useState(false);
+  const [tab, setTab] = useState<"scene" | "video" | "evidence" | "source">("scene");
+  const queueVideoFn = useServerFn(queueVideoGeneration);
+  const logFn = useServerFn(logAuditEvent);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
