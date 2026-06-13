@@ -60,6 +60,7 @@ function SceneViewer() {
   const [entities, setEntities] = useState<SceneEntity[]>([]);
   const [events, setEvents] = useState<SceneEvent[]>([]);
   const [firText, setFirText] = useState<string>("");
+  const [firFull, setFirFull] = useState<Record<string, unknown> | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [showSource, setShowSource] = useState(false);
@@ -141,10 +142,15 @@ function SceneViewer() {
         if (recId) {
           supabase
             .from("fir_records")
-            .select("raw_narrative")
+            .select("*")
             .eq("id", recId)
             .single()
-            .then(({ data: rec }) => { if (rec?.raw_narrative) setFirText(rec.raw_narrative); });
+            .then(({ data: rec }) => {
+              if (rec) {
+                setFirFull(rec as unknown as Record<string, unknown>);
+                if (rec.raw_narrative) setFirText(rec.raw_narrative);
+              }
+            });
         }
       });
   }, [jobId, job?.status, setTotalEvents, setCurrentEvent]);
@@ -190,8 +196,8 @@ function SceneViewer() {
     ? ((job as Record<string, unknown>).fir_records as Record<string, string>)?.case_number
     : jobId?.slice(0, 12) || "—";
 
-  const firRec = (job as Record<string, unknown>)?.fir_records as Record<string, unknown> | undefined;
-  const firId = firRec?.id as string | undefined;
+  const firRec = firFull ?? ((job as Record<string, unknown>)?.fir_records as Record<string, unknown> | undefined);
+  const firId = (firRec?.id as string | undefined) ?? undefined;
   const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
   const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
 
