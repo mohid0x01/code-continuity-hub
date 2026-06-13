@@ -25,23 +25,34 @@ export const logAuditEvent = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export type AuditLogRow = {
+  id: string;
+  actor_email: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: string;
+  created_at: string;
+};
+
 export const listAuditLogs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }): Promise<AuditLogRow[]> => {
     const { supabase } = context;
     const { data, error } = await supabase
       .from("audit_logs" as never)
-      .select("*")
+      .select("id, actor_email, action, entity_type, entity_id, metadata, created_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
-    return (data ?? []) as Array<{
-      id: string;
-      actor_email: string | null;
-      action: string;
-      entity_type: string | null;
-      entity_id: string | null;
-      metadata: Record<string, unknown>;
-      created_at: string;
-    }>;
+    const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: String(r.id),
+      actor_email: (r.actor_email as string | null) ?? null,
+      action: String(r.action),
+      entity_type: (r.entity_type as string | null) ?? null,
+      entity_id: (r.entity_id as string | null) ?? null,
+      metadata: JSON.stringify(r.metadata ?? {}),
+      created_at: String(r.created_at),
+    }));
   });
