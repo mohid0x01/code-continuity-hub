@@ -243,6 +243,7 @@ function SceneViewer() {
           <button onClick={() => handleZoom("in")} title="Zoom in" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomIn className="h-4 w-4" /></button>
           <button onClick={() => handleZoom("out")} title="Zoom out" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomOut className="h-4 w-4" /></button>
           <button onClick={handleDownload} title="Download JSON" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
+          <button onClick={handlePdfExport} title="Export Court Report PDF" className="rounded-[4px] p-1.5 text-emerald-400 hover:bg-emerald-500/10"><FileDown className="h-4 w-4" /></button>
           <button onClick={handleShare} title="Copy share link" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Share2 className="h-4 w-4" /></button>
           <button onClick={handleExpand} title="Fullscreen" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Expand className="h-4 w-4" /></button>
         </div>
