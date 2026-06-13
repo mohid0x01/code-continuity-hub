@@ -301,6 +301,21 @@ function SceneViewer() {
 
         {/* 3D Canvas */}
         <div className="relative flex-1">
+          {/* Tab bar */}
+          <div className="flex h-10 items-center gap-1 border-b border-border-subtle bg-background/80 px-3 backdrop-blur">
+            {([
+              { id: "scene", label: "3D Scene", icon: Box },
+              { id: "video", label: "AI Video", icon: Film },
+              { id: "evidence", label: "Evidence", icon: Paperclip },
+              { id: "source", label: "Source & Map", icon: FileText },
+            ] as const).map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${tab === t.id ? "bg-emerald-500/10 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
+                <t.icon className="h-3.5 w-3.5" /> {t.label}
+              </button>
+            ))}
+          </div>
+
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
@@ -309,7 +324,7 @@ function SceneViewer() {
                 <p className="mt-1 font-mono text-[11px] text-gold">{job?.status || "connecting"}</p>
               </div>
             </div>
-          ) : (
+          ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
                 <Scene3DCanvas entities={entities} events={events} />
@@ -323,6 +338,38 @@ function SceneViewer() {
                 </div>
               )}
             </>
+          ) : tab === "video" ? (
+            <div className="flex h-[calc(100%-2.5rem)] items-center justify-center p-8">
+              {videoUrl ? (
+                <video src={videoUrl} controls className="max-h-full max-w-full rounded-[6px] border border-border-subtle shadow-2xl" />
+              ) : (
+                <div className="text-center">
+                  <Film className="mx-auto h-12 w-12 text-emerald-400/50" />
+                  <h3 className="mt-4 text-lg font-semibold text-text-primary">AI 3D Incident Video</h3>
+                  <p className="mt-2 max-w-md text-sm text-text-muted">
+                    Generate a 10-second photoreal 3D reconstruction of this incident driven by the scene manifest, real Pakistan location, and FIR narrative.
+                  </p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
+                  <button onClick={handleGenerateVideo} disabled={videoStatus === "queued" || videoStatus === "processing"}
+                    className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
+                    <Sparkles className="h-4 w-4" /> {videoStatus === "queued" ? "Queued…" : "Generate 10s Video"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : tab === "evidence" ? (
+            <div className="h-[calc(100%-2.5rem)] overflow-y-auto p-6">
+              {firId ? <EvidenceManager firId={firId} /> : <p className="text-sm text-text-muted">Loading evidence…</p>}
+            </div>
+          ) : (
+            <div className="h-[calc(100%-2.5rem)] overflow-y-auto p-6">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">FIR Narrative</h3>
+              <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-[6px] border border-border-subtle bg-background/60 p-4 text-[12px] leading-relaxed text-text-secondary">{firText || "No narrative."}</pre>
+              <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">Real-World Location</h3>
+              <Suspense fallback={<div className="mt-3 h-[300px] animate-pulse rounded-[6px] bg-surface" />}>
+                <div className="mt-3"><CrimeMap height="320px" locations={geocodeFirText(firText, locationEntities.map((l) => l.label))} /></div>
+              </Suspense>
+            </div>
           )}
         </div>
 
