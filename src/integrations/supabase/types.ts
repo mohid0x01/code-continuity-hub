@@ -14,6 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      evidence_files: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_name: string
+          file_size: number | null
+          file_type: string
+          fir_id: string
+          id: string
+          mime_type: string | null
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_name: string
+          file_size?: number | null
+          file_type: string
+          fir_id: string
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          fir_id?: string
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evidence_files_fir_id_fkey"
+            columns: ["fir_id"]
+            isOneToOne: false
+            referencedRelation: "fir_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fir_jobs: {
         Row: {
           created_at: string

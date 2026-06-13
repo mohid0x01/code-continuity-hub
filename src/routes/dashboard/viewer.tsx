@@ -18,6 +18,11 @@ import {
   Loader,
   ZoomIn,
   ZoomOut,
+  Film,
+  Paperclip,
+  Box,
+  FileDown,
+  Sparkles,
 } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,6 +30,11 @@ import { useSceneStore } from "@/stores/sceneStore";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useServerFn } from "@tanstack/react-start";
+import { queueVideoGeneration } from "@/lib/video.functions";
+import { logAuditEvent } from "@/lib/audit.functions";
+import { exportCourtReportPDF } from "@/lib/pdf-export";
+import { EvidenceManager } from "@/components/EvidenceManager";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -50,9 +60,13 @@ function SceneViewer() {
   const [entities, setEntities] = useState<SceneEntity[]>([]);
   const [events, setEvents] = useState<SceneEvent[]>([]);
   const [firText, setFirText] = useState<string>("");
+  const [firFull, setFirFull] = useState<Record<string, unknown> | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [showSource, setShowSource] = useState(false);
+  const [tab, setTab] = useState<"scene" | "video" | "evidence" | "source">("scene");
+  const queueVideoFn = useServerFn(queueVideoGeneration);
+  const logFn = useServerFn(logAuditEvent);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
@@ -128,10 +142,15 @@ function SceneViewer() {
         if (recId) {
           supabase
             .from("fir_records")
-            .select("raw_narrative")
+            .select("*")
             .eq("id", recId)
             .single()
-            .then(({ data: rec }) => { if (rec?.raw_narrative) setFirText(rec.raw_narrative); });
+            .then(({ data: rec }) => {
+              if (rec) {
+                setFirFull(rec as unknown as Record<string, unknown>);
+                if (rec.raw_narrative) setFirText(rec.raw_narrative);
+              }
+            });
         }
       });
   }, [jobId, job?.status, setTotalEvents, setCurrentEvent]);
@@ -177,6 +196,43 @@ function SceneViewer() {
     ? ((job as Record<string, unknown>).fir_records as Record<string, string>)?.case_number
     : jobId?.slice(0, 12) || "—";
 
+  const firRec = firFull ?? ((job as Record<string, unknown>)?.fir_records as Record<string, unknown> | undefined);
+  const firId = (firRec?.id as string | undefined) ?? undefined;
+  const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
+  const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
+
+  const handleGenerateVideo = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      await queueVideoFn({ data: { jobId } });
+      await logFn({ data: { action: "video.queue", entityType: "fir_job", entityId: jobId } }).catch(() => {});
+      toast.success("AI video queued — 10s 3D incident clip will appear when ready");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to queue video");
+    }
+  }, [jobId, queueVideoFn, logFn]);
+
+  const handlePdfExport = useCallback(async () => {
+    if (!firRec) { toast.error("FIR data not loaded yet"); return; }
+    exportCourtReportPDF({
+      caseNumber: String(caseNumber),
+      incidentType: (firRec.incident_type as string) ?? null,
+      incidentDate: (firRec.incident_date as string) ?? null,
+      city: (firRec.city as string) ?? null,
+      area: (firRec.area as string) ?? null,
+      formattedAddress: (firRec.formatted_address as string) ?? null,
+      latitude: (firRec.latitude as number) ?? null,
+      longitude: (firRec.longitude as number) ?? null,
+      narrative: firText || ((firRec.raw_narrative as string) ?? ""),
+      entities: entities.map((e) => ({ label: e.label, entity_type: e.entity_type, entity_role: e.entity_role, confidence: e.confidence })),
+      events: events.map((e) => ({ sequence_number: e.sequence_number, description: e.description, action_label: e.action_label })),
+      videoUrl: videoUrl ?? null,
+      createdAt: new Date().toISOString(),
+    });
+    await logFn({ data: { action: "report.export_pdf", entityType: "fir_job", entityId: jobId ?? null, metadata: { caseNumber: String(caseNumber) } } }).catch(() => {});
+    toast.success("Court report PDF downloaded");
+  }, [firRec, firText, entities, events, caseNumber, jobId, videoUrl, logFn]);
+
   return (
     <div className="-m-8 flex h-[calc(100vh-73px)] flex-col bg-background">
       {/* Top bar */}
@@ -193,6 +249,7 @@ function SceneViewer() {
           <button onClick={() => handleZoom("in")} title="Zoom in" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomIn className="h-4 w-4" /></button>
           <button onClick={() => handleZoom("out")} title="Zoom out" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomOut className="h-4 w-4" /></button>
           <button onClick={handleDownload} title="Download JSON" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
+          <button onClick={handlePdfExport} title="Export Court Report PDF" className="rounded-[4px] p-1.5 text-emerald-400 hover:bg-emerald-500/10"><FileDown className="h-4 w-4" /></button>
           <button onClick={handleShare} title="Copy share link" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Share2 className="h-4 w-4" /></button>
           <button onClick={handleExpand} title="Fullscreen" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Expand className="h-4 w-4" /></button>
         </div>
@@ -250,6 +307,21 @@ function SceneViewer() {
 
         {/* 3D Canvas */}
         <div className="relative flex-1">
+          {/* Tab bar */}
+          <div className="flex h-10 items-center gap-1 border-b border-border-subtle bg-background/80 px-3 backdrop-blur">
+            {([
+              { id: "scene", label: "3D Scene", icon: Box },
+              { id: "video", label: "AI Video", icon: Film },
+              { id: "evidence", label: "Evidence", icon: Paperclip },
+              { id: "source", label: "Source & Map", icon: FileText },
+            ] as const).map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${tab === t.id ? "bg-emerald-500/10 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
+                <t.icon className="h-3.5 w-3.5" /> {t.label}
+              </button>
+            ))}
+          </div>
+
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
@@ -258,7 +330,7 @@ function SceneViewer() {
                 <p className="mt-1 font-mono text-[11px] text-gold">{job?.status || "connecting"}</p>
               </div>
             </div>
-          ) : (
+          ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
                 <Scene3DCanvas entities={entities} events={events} />
@@ -272,6 +344,38 @@ function SceneViewer() {
                 </div>
               )}
             </>
+          ) : tab === "video" ? (
+            <div className="flex h-[calc(100%-2.5rem)] items-center justify-center p-8">
+              {videoUrl ? (
+                <video src={videoUrl} controls className="max-h-full max-w-full rounded-[6px] border border-border-subtle shadow-2xl" />
+              ) : (
+                <div className="text-center">
+                  <Film className="mx-auto h-12 w-12 text-emerald-400/50" />
+                  <h3 className="mt-4 text-lg font-semibold text-text-primary">AI 3D Incident Video</h3>
+                  <p className="mt-2 max-w-md text-sm text-text-muted">
+                    Generate a 10-second photoreal 3D reconstruction of this incident driven by the scene manifest, real Pakistan location, and FIR narrative.
+                  </p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
+                  <button onClick={handleGenerateVideo} disabled={videoStatus === "queued" || videoStatus === "processing"}
+                    className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
+                    <Sparkles className="h-4 w-4" /> {videoStatus === "queued" ? "Queued…" : "Generate 10s Video"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : tab === "evidence" ? (
+            <div className="h-[calc(100%-2.5rem)] overflow-y-auto p-6">
+              {firId ? <EvidenceManager firId={firId} /> : <p className="text-sm text-text-muted">Loading evidence…</p>}
+            </div>
+          ) : (
+            <div className="h-[calc(100%-2.5rem)] overflow-y-auto p-6">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">FIR Narrative</h3>
+              <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-[6px] border border-border-subtle bg-background/60 p-4 text-[12px] leading-relaxed text-text-secondary">{firText || "No narrative."}</pre>
+              <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">Real-World Location</h3>
+              <Suspense fallback={<div className="mt-3 h-[300px] animate-pulse rounded-[6px] bg-surface" />}>
+                <div className="mt-3"><CrimeMap height="320px" locations={geocodeFirText(firText, locationEntities.map((l) => l.label))} /></div>
+              </Suspense>
+            </div>
           )}
         </div>
 

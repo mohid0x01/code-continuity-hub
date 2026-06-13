@@ -12,6 +12,7 @@ import {
   Moon,
   CheckCircle,
   ShieldCheck,
+  Shield,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/hooks/useTheme";
@@ -24,6 +25,7 @@ const navItems = [
   { label: "Submit New FIR", icon: FilePlus, href: "/dashboard/submit" },
   { label: "My Reconstructions", icon: Boxes, href: "/dashboard/archive" },
   { label: "Case Archive", icon: Archive, href: "/dashboard/archive" },
+  { label: "Audit Log", icon: Shield, href: "/dashboard/audit" },
   { label: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
 

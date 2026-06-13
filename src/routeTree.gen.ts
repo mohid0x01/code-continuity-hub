@@ -17,7 +17,9 @@ import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
 import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardProcessingRouteImport } from './routes/dashboard/processing'
+import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
 import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
+import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as ApiProxySplatRouteImport } from './routes/api/proxy/$'
 
 const LoginRoute = LoginRouteImport.update({
@@ -60,10 +62,20 @@ const DashboardProcessingRoute = DashboardProcessingRouteImport.update({
   path: '/processing',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardAuditRoute = DashboardAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardArchiveRoute = DashboardArchiveRouteImport.update({
   id: '/archive',
   path: '/archive',
   getParentRoute: () => DashboardRoute,
+} as any)
+const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
+  id: '/api/v1/$',
+  path: '/api/v1/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiProxySplatRoute = ApiProxySplatRouteImport.update({
   id: '/api/proxy/$',
@@ -76,23 +88,27 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -100,12 +116,14 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -114,35 +132,41 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard/'
     | '/api/proxy/$'
+    | '/api/v1/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard'
     | '/api/proxy/$'
+    | '/api/v1/$'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard/'
     | '/api/proxy/$'
+    | '/api/v1/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -150,6 +174,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiProxySplatRoute: typeof ApiProxySplatRoute
+  ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -210,12 +235,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProcessingRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/audit': {
+      id: '/dashboard/audit'
+      path: '/audit'
+      fullPath: '/dashboard/audit'
+      preLoaderRoute: typeof DashboardAuditRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/archive': {
       id: '/dashboard/archive'
       path: '/archive'
       fullPath: '/dashboard/archive'
       preLoaderRoute: typeof DashboardArchiveRouteImport
       parentRoute: typeof DashboardRoute
+    }
+    '/api/v1/$': {
+      id: '/api/v1/$'
+      path: '/api/v1/$'
+      fullPath: '/api/v1/$'
+      preLoaderRoute: typeof ApiV1SplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/proxy/$': {
       id: '/api/proxy/$'
@@ -229,6 +268,7 @@ declare module '@tanstack/react-router' {
 
 interface DashboardRouteChildren {
   DashboardArchiveRoute: typeof DashboardArchiveRoute
+  DashboardAuditRoute: typeof DashboardAuditRoute
   DashboardProcessingRoute: typeof DashboardProcessingRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardSubmitRoute: typeof DashboardSubmitRoute
@@ -238,6 +278,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardArchiveRoute: DashboardArchiveRoute,
+  DashboardAuditRoute: DashboardAuditRoute,
   DashboardProcessingRoute: DashboardProcessingRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardSubmitRoute: DashboardSubmitRoute,
@@ -254,17 +295,8 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiProxySplatRoute: ApiProxySplatRoute,
+  ApiV1SplatRoute: ApiV1SplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
