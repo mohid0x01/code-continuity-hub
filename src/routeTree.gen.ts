@@ -17,6 +17,7 @@ import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
 import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardProcessingRouteImport } from './routes/dashboard/processing'
+import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
 import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
 import { Route as ApiProxySplatRouteImport } from './routes/api/proxy/$'
 
@@ -60,6 +61,11 @@ const DashboardProcessingRoute = DashboardProcessingRouteImport.update({
   path: '/processing',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardAuditRoute = DashboardAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardArchiveRoute = DashboardArchiveRouteImport.update({
   id: '/archive',
   path: '/archive',
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
+  '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/submit': typeof DashboardSubmitRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/archive'
+    | '/dashboard/audit'
     | '/dashboard/processing'
     | '/dashboard/settings'
     | '/dashboard/submit'
@@ -210,6 +222,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProcessingRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/audit': {
+      id: '/dashboard/audit'
+      path: '/audit'
+      fullPath: '/dashboard/audit'
+      preLoaderRoute: typeof DashboardAuditRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/archive': {
       id: '/dashboard/archive'
       path: '/archive'
@@ -229,6 +248,7 @@ declare module '@tanstack/react-router' {
 
 interface DashboardRouteChildren {
   DashboardArchiveRoute: typeof DashboardArchiveRoute
+  DashboardAuditRoute: typeof DashboardAuditRoute
   DashboardProcessingRoute: typeof DashboardProcessingRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardSubmitRoute: typeof DashboardSubmitRoute
@@ -238,6 +258,7 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardArchiveRoute: DashboardArchiveRoute,
+  DashboardAuditRoute: DashboardAuditRoute,
   DashboardProcessingRoute: DashboardProcessingRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardSubmitRoute: DashboardSubmitRoute,
@@ -258,3 +279,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
