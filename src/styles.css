@@ -1,7 +1,9 @@
+/* Dono @import lines sab se upar hongi */
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
 
+/* Uske baad @source aur baqi custom variants ayenge */
+@source "../src";
 @custom-variant dark (&:is(.dark *));
 
 /* Fonts loaded via <link> in __root.tsx — UnifrakturMaguntia, Pirata One, Bricolage Grotesque, JetBrains Mono */
