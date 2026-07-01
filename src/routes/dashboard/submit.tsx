@@ -5,7 +5,23 @@ import { useServerFn } from "@tanstack/react-start";
 import { submitFir, runMockPipeline } from "@/lib/fir.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock, Sparkles, FileText } from "lucide-react";
+
+// Load all template files from /Commands at build time.
+const templateModules = import.meta.glob("/Commands/*.txt", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const templates = Object.entries(templateModules)
+  .map(([path, raw]) => {
+    const slug = path.split("/").pop()!.replace(/\.txt$/, "");
+    const firstLine = raw.split("\n").find((l) => l.startsWith("#"));
+    const title = firstLine ? firstLine.replace(/^#\s*/, "").trim() : slug;
+    const body = raw.replace(/^#.*\n\n?/, "").trim();
+    return { slug, title, body };
+  })
+  .sort((a, b) => a.title.localeCompare(b.title));
 
 export const Route = createFileRoute("/dashboard/submit")({
   component: SubmitFIR,
@@ -38,6 +54,7 @@ const tips = [
 
 function SubmitFIR() {
   const [narrative, setNarrative] = useState("");
+  const [templateSlug, setTemplateSlug] = useState("");
   const [previewCaseNumber, setPreviewCaseNumber] = useState("FIR-2026-XXXXXX");
   const [location, setLocation] = useState<PickedLocation | null>(null);
   const [incidentDate, setIncidentDate] = useState("");
@@ -125,6 +142,28 @@ function SubmitFIR() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          {/* Template picker */}
+          <div>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">
+              <FileText className="h-3 w-3" /> Load FIR Template ({templates.length} available)
+            </label>
+            <select
+              value={templateSlug}
+              onChange={(e) => {
+                const slug = e.target.value;
+                setTemplateSlug(slug);
+                const t = templates.find((x) => x.slug === slug);
+                if (t) setNarrative(t.body);
+              }}
+              className="glass-input mt-2 w-full rounded-[6px] px-4 py-3 text-sm text-text-primary"
+            >
+              <option value="">— Select a template to prefill narrative —</option>
+              {templates.map((t) => (
+                <option key={t.slug} value={t.slug}>{t.title}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Auto case number — read-only */}
           <div>
             <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">

@@ -39,25 +39,36 @@ function AuditPage() {
           <thead>
             <tr className="border-b border-border-subtle bg-surface text-[11px] uppercase tracking-wider text-text-muted">
               <th className="px-4 py-3 text-left">Timestamp</th>
-              <th className="px-4 py-3 text-left">Actor</th>
+              <th className="px-4 py-3 text-left">Actor / IP</th>
               <th className="px-4 py-3 text-left">Action</th>
-              <th className="px-4 py-3 text-left">Entity</th>
-              <th className="px-4 py-3 text-left">Metadata</th>
+              <th className="px-4 py-3 text-left">Path / Referer</th>
+              <th className="px-4 py-3 text-left">User-Agent</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && !loading && (
               <tr><td colSpan={5} className="p-6 text-center text-xs text-text-muted">No audit events recorded yet.</td></tr>
             )}
-            {rows.map((r) => (
-              <tr key={r.id} className="border-b border-border-subtle hover:bg-surface/40">
-                <td className="px-4 py-3 font-mono text-[11px] text-text-muted">{new Date(r.created_at).toLocaleString()}</td>
-                <td className="px-4 py-3 text-text-secondary">{r.actor_email ?? "—"}</td>
-                <td className="px-4 py-3"><span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">{r.action}</span></td>
-                <td className="px-4 py-3 font-mono text-[11px] text-text-muted">{r.entity_type ?? "—"}{r.entity_id ? `:${r.entity_id.slice(0, 8)}` : ""}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-text-muted truncate max-w-xs">{r.metadata}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              let meta: { path?: string; referer?: string } = {};
+              try { meta = JSON.parse(r.metadata); } catch { /* noop */ }
+              return (
+                <tr key={r.id} className="border-b border-border-subtle hover:bg-surface/40">
+                  <td className="px-4 py-3 font-mono text-[11px] text-text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-text-secondary">
+                    <div>{r.actor_email ?? <span className="text-text-muted italic">anonymous</span>}</div>
+                    {r.ip_address && <div className="font-mono text-[10px] text-text-muted">{r.ip_address}</div>}
+                  </td>
+                  <td className="px-4 py-3"><span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">{r.action}</span></td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-text-muted max-w-xs">
+                    {meta.path && <div className="truncate">→ {meta.path}</div>}
+                    {meta.referer && <div className="truncate opacity-70">← {meta.referer}</div>}
+                    {!meta.path && !meta.referer && (r.entity_type ?? "—")}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-text-muted truncate max-w-[240px]" title={r.user_agent ?? ""}>{r.user_agent ?? "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
