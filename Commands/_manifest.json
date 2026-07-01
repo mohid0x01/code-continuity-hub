@@ -1,0 +1,122 @@
+[
+  {
+    "slug": "theft-motorcycle",
+    "title": "Motorcycle Theft \u2014 Roman Urdu"
+  },
+  {
+    "slug": "robbery-armed",
+    "title": "Armed Robbery at Shop"
+  },
+  {
+    "slug": "assault-domestic",
+    "title": "Domestic Assault Complaint"
+  },
+  {
+    "slug": "kidnapping-child",
+    "title": "Child Kidnapping FIR"
+  },
+  {
+    "slug": "murder-firearm",
+    "title": "Murder by Firearm"
+  },
+  {
+    "slug": "burglary-house",
+    "title": "House Burglary at Night"
+  },
+  {
+    "slug": "mobile-snatch",
+    "title": "Mobile Phone Snatching"
+  },
+  {
+    "slug": "cyber-fraud",
+    "title": "Online Banking Fraud"
+  },
+  {
+    "slug": "vehicle-accident",
+    "title": "Fatal Road Accident"
+  },
+  {
+    "slug": "property-encroachment",
+    "title": "Land Encroachment Dispute"
+  },
+  {
+    "slug": "assault-public",
+    "title": "Public Place Assault"
+  },
+  {
+    "slug": "blackmail-online",
+    "title": "Online Blackmail \u2014 Social Media"
+  },
+  {
+    "slug": "shoplifting",
+    "title": "Shoplifting Incident"
+  },
+  {
+    "slug": "harassment-workplace",
+    "title": "Workplace Harassment Complaint"
+  },
+  {
+    "slug": "threat-to-life",
+    "title": "Threat to Life"
+  },
+  {
+    "slug": "missing-person",
+    "title": "Missing Person Report"
+  },
+  {
+    "slug": "drug-possession",
+    "title": "Narcotics Recovery Complaint"
+  },
+  {
+    "slug": "arson-property",
+    "title": "Arson / Fire Attack"
+  },
+  {
+    "slug": "counterfeit-currency",
+    "title": "Counterfeit Currency Circulation"
+  },
+  {
+    "slug": "hit-and-run",
+    "title": "Hit and Run Case"
+  },
+  {
+    "slug": "extortion-bhatta",
+    "title": "Extortion / Bhatta Demand"
+  },
+  {
+    "slug": "bike-snatch",
+    "title": "Bike Snatching at Signal"
+  },
+  {
+    "slug": "child-abuse",
+    "title": "Child Abuse Complaint"
+  },
+  {
+    "slug": "bank-heist",
+    "title": "Bank Robbery"
+  },
+  {
+    "slug": "stalking",
+    "title": "Stalking Complaint"
+  },
+  {
+    "slug": "acid-attack",
+    "title": "Acid Attack"
+  },
+  {
+    "slug": "livestock-theft",
+    "title": "Cattle / Livestock Theft"
+  },
+  {
+    "slug": "gang-fight",
+    "title": "Gang Fight / Group Clash"
+  },
+  {
+    "slug": "smuggling-check",
+    "title": "Smuggling Recovery at Check Post"
+  },
+  {
+    "slug": "vandalism-public",
+    "title": "Vandalism of Public Property"
+  }
+]

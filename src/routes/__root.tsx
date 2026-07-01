@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
@@ -122,6 +123,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  // Visitor beacon → logs IP, path, referer to audit_logs.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const send = () => {
+      const path = window.location.pathname + window.location.search;
+      fetch("/api/public/visitor", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path, referer: document.referrer || null }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+    send();
+    const unsub = router.subscribe("onResolved", send);
+    return () => unsub();
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,0 +1,3 @@
+# Armed Robbery at Shop
+
+Roznama tafseel ye hai ke aaj {date} ko raat {time} baje, jab main apni dukaan (name: {shop_name}) mein mojood tha, do mulzim pistol ke saath andar ghusay. Ek ne mujhe pistol dikha kar khamosh rehne ka kaha aur doosre ne golak (cash register) se {amount} rupay aur mobile phone chheen liye. Mulzim taqreeban 25-30 saal ke thay, ek ne kaali qameez pehni thi. Wo motorcycle par firar ho gaye. Meharbani farma kar FIR darj ki jaye aur mulzimon ki giraftari yaqeeni banayi jaye.

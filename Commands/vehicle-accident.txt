@@ -1,0 +1,3 @@
+# Fatal Road Accident
+
+Aaj {date} subah {time} baje {location} ke qareeb ek trailer ne meri car (registration {plate}) ko takar mari jis se meri family ka ek fard {victim_name} maar gaya aur do zakhmi ho gaye. Trailer driver mauqe se firar ho gaya. Registration number {truck_plate} tha. Traffic Police mojood thi. FIR PPC 320/427 ke tehat darj ki jaye.

@@ -1,0 +1,3 @@
+# Missing Person Report
+
+Ye report darj karwayi jati hai ke mera bhai/beta {victim_name}, umar {age} saal, height {height}, aakhri baar {date} subah {time} baje {location} par apne dost {friend_name} ke saath dekha gaya tha. Wo pehnaway me {clothes} tha. Rabta karne ki har koshish nakaam ho chuki. Mobile number ({phone}) band hai. Baraye meharbani missing report darj karke talashi shuru karwayi jaye.

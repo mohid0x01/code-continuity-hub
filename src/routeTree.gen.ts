@@ -21,6 +21,7 @@ import { Route as DashboardProcessingRouteImport } from './routes/dashboard/proc
 import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
 import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
+import { Route as ApiPublicVisitorRouteImport } from './routes/api/public/visitor'
 import { Route as ApiProxySplatRouteImport } from './routes/api/proxy/$'
 
 const LoginRoute = LoginRouteImport.update({
@@ -84,6 +85,11 @@ const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
   path: '/api/v1/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicVisitorRoute = ApiPublicVisitorRouteImport.update({
+  id: '/api/public/visitor',
+  path: '/api/public/visitor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProxySplatRoute = ApiProxySplatRouteImport.update({
   id: '/api/proxy/$',
   path: '/api/proxy/$',
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRoutesByTo {
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRoutesById {
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
+  '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/dashboard/viewer'
     | '/dashboard/'
     | '/api/proxy/$'
+    | '/api/public/visitor'
     | '/api/v1/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/dashboard/viewer'
     | '/dashboard'
     | '/api/proxy/$'
+    | '/api/public/visitor'
     | '/api/v1/$'
   id:
     | '__root__'
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/dashboard/viewer'
     | '/dashboard/'
     | '/api/proxy/$'
+    | '/api/public/visitor'
     | '/api/v1/$'
   fileRoutesById: FileRoutesById
 }
@@ -187,6 +199,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiProxySplatRoute: typeof ApiProxySplatRoute
+  ApiPublicVisitorRoute: typeof ApiPublicVisitorRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
 
@@ -276,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/visitor': {
+      id: '/api/public/visitor'
+      path: '/api/public/visitor'
+      fullPath: '/api/public/visitor'
+      preLoaderRoute: typeof ApiPublicVisitorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/proxy/$': {
       id: '/api/proxy/$'
       path: '/api/proxy/$'
@@ -317,6 +337,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiProxySplatRoute: ApiProxySplatRoute,
+  ApiPublicVisitorRoute: ApiPublicVisitorRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
 }
 export const routeTree = rootRouteImport

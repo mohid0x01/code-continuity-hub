@@ -1,0 +1,3 @@
+# Child Abuse Complaint
+
+Ye report ke ain munsalik: Meri beti {victim_name}, umar {age} saal, ne aaj mujhe bataya ke padosi {accused_name} ne use ghar bulakar zabardasti ki. Medical examination hospital ({hospital}) mein karwaya gaya. Medical report munsalik hai. Zainab Alert Response and Recovery Act aur PPC 377-B ke tehat foran FIR darj ki jaye.

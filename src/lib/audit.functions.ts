@@ -33,6 +33,8 @@ export type AuditLogRow = {
   entity_id: string | null;
   metadata: string;
   created_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
 };
 
 export const listAuditLogs = createServerFn({ method: "POST" })
@@ -41,9 +43,9 @@ export const listAuditLogs = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { data, error } = await supabase
       .from("audit_logs" as never)
-      .select("id, actor_email, action, entity_type, entity_id, metadata, created_at")
+      .select("id, actor_email, action, entity_type, entity_id, metadata, created_at, ip_address, user_agent")
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(500);
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
@@ -54,5 +56,7 @@ export const listAuditLogs = createServerFn({ method: "POST" })
       entity_id: (r.entity_id as string | null) ?? null,
       metadata: JSON.stringify(r.metadata ?? {}),
       created_at: String(r.created_at),
+      ip_address: (r.ip_address as string | null) ?? null,
+      user_agent: (r.user_agent as string | null) ?? null,
     }));
   });

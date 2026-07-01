@@ -1,0 +1,3 @@
+# Public Place Assault
+
+Roznama tafseel: Aaj {date} sham {time} baje jab main {location} par mojood tha, purani ranjish ki bina par mulzim {accused_name} aur uske sathiyon ne mujh par danda aur lathiyon se hamla kar diya. Mere sar par gehray zakhm aye. Medical report ({hospital}) munsalik hai. Chashm-deed gawah {witness_name} mojood hain. FIR PPC 337-A/34 ke tehat darj ki jaye.

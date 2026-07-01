@@ -1,0 +1,3 @@
+# Arson / Fire Attack
+
+Roznama: Aaj {date} raat {time} baje mulzim {accused_name} ne purani dushmani ki bina par petrol chirak kar mere ghar ke bahar khari gari ({vehicle}, registration {plate}) ko aag laga di. Fire brigade ({station}) ne aag bujhayi. Padosi {witness_name} chashm-deed hain. PPC 435/436 ke tehat FIR darj ki jaye.

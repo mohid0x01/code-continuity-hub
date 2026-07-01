@@ -1,0 +1,3 @@
+# Online Banking Fraud
+
+Ye report ke ain munsalik ke, aaj {date} ko main ne apni mobile par ek call receive ki jis me caller ne khud ko bank officer bata kar OTP mangi. Meri ghalati par main ne OTP share ki, jis ke bad mere account se {amount} rupay minus ho gaye — teen transactions me. Bank statement munsalik hai. Baraye meharbani PECA 2016 ke tehat FIR darj ki jaye aur transaction trace karwayi jaye.

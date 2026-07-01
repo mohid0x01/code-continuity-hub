@@ -1,0 +1,3 @@
+# Narcotics Recovery Complaint
+
+Bayaan tafteesh officer: Aaj {date} raat {time} baje mukhbir khaas ki ittila par mulzim {accused_name} ko {location} par giraftar kiya gaya. Talashi ke doran uske qabza se {quantity} charas/heroin baramad hui. Panchnama bana kar barizmani gawahon {witness1}, {witness2} ki maujoodgi mein tayyar kiya gaya. Control of Narcotic Substances Act 1997 ke tehat FIR darj ki jaye.
