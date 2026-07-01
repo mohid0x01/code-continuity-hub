@@ -11,8 +11,17 @@ export const Route = createFileRoute("/dashboard/reconstructions")({
 function MyReconstructions() {
   const jobs = useJobsRealtime();
 
+  // Only viewer-ready cases: completed AND has either 3D scene result or AI video.
   const completedJobs = useMemo(
-    () => jobs.filter((j) => j.status === "completed"),
+    () =>
+      jobs.filter((j) => {
+        if (j.status !== "completed") return false;
+        const hasScene = Boolean((j as unknown as { result_scene?: unknown }).result_scene);
+        const hasVideo = Boolean(
+          (j as unknown as { video_url?: string | null }).video_url,
+        );
+        return hasScene || hasVideo;
+      }),
     [jobs],
   );
 
