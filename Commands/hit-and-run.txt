@@ -1,0 +1,3 @@
+# Hit and Run Case
+
+Aaj {date} sham {time} baje {location} par ek Toyota Corolla (registration {plate}) ne meri motorcycle ko takar mari aur mauqe se firar ho gaya. Main zakhmi hoon, medical report {hospital} se munsalik hai. Chashm-deed gawah {witness_name} ne registration number note kiya. FIR PPC 279/337-G ke tehat darj ki jaye.

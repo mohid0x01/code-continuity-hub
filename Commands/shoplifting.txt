@@ -1,0 +1,3 @@
+# Shoplifting Incident
+
+Aaj {date} ko dopahar {time} baje meri dukaan ({shop_name}, {location}) mein do afraad grahakon ke bhes mein aye aur cameron ki blind spot ka faida uthate huay mobile phones ki {count} units (mojmoi qeemat {amount} rupay) chura kar firar ho gaye. CCTV footage mojood hai. Baraye meharbani FIR darj karke tafteesh amal me layi jaye.

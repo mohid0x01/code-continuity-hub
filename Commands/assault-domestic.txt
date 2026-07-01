@@ -1,0 +1,3 @@
+# Domestic Assault Complaint
+
+Bayaan-e-mudda'iya: Main {complainant_name}, {age} saal, sakina {address}. Meri shadi ko {years} saal ho gaye hain aur mera shohar {accused_name} akhir raat sharab ke nashe mein ghar aata hai aur mujhe aur mere bachon ko marta hai. Aaj {date} raat ko us ne mujh par loha rod se hamla kiya jis se mere sar aur bazoo par zakhm ayen. Medical report saath munsalik hai. Meharbani karke ghareloo tashaddud (Domestic Violence Act) ke tehat FIR darj ki jaye.

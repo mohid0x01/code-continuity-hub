@@ -1,0 +1,3 @@
+# Land Encroachment Dispute
+
+Meri malkiyat plot ({plot_no}, area {location}) par mulzim {accused_name} ne zabardasti qabza karne ki koshish ki hai. Aaj {date} ko us ne apne sathiyon ke saath boundary wall tor kar tent laga di. Malkiyat ke tamam dastawezaat (registry) munsalik hain. Baraye meharbani PPC 447 (criminal trespass) ke tehat FIR darj ki jaye aur qabza khali karwaya jaye.

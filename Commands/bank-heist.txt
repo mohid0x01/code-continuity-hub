@@ -1,0 +1,3 @@
+# Bank Robbery
+
+Aaj {date} subah {time} baje {bank_name} branch ({location}) par 4 musallah mulzim andar ghusay, security guard ko qaboo kar ke cash counter se taqreeban {amount} rupay lut kar firar ho gaye. Ek staff member ({victim_name}) zakhmi hua. Sab CCTV footage aur eyewitness bayanaat mojood hain. PPC 395/397 ke tehat FIR darj ki jaye.

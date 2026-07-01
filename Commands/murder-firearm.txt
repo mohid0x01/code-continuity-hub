@@ -1,0 +1,3 @@
+# Murder by Firearm
+
+Bayaan mudda'i: Marhoom {victim_name} s/o {father_name}, umar {age} saal, sakin {address}, mera bhai tha. Aaj {date} ki subah {time} baje, {location} par purani dushmani ki bina par mulzim {accused_name} aur uske do sathiyon ne pistol ki fire karke marhoom ko qatal kar diya. Chashm-deed gawah {witness1}, {witness2} mojood hain. Lash post-mortem ke liye {hospital} le jayi gayi hai. FIR PPC 302/34 ke tehat darj ki jaye.

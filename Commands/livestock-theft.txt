@@ -1,0 +1,3 @@
+# Cattle / Livestock Theft
+
+Roznama: Aaj {date} ki raat mere baada ({location}) se {count} bhens/gaayn chura li gayi. Chowkidar {witness_name} ne 3 na-ma'loom afraad ko trolley me maweshi ladte dekha lekin unhein rok nahin saka. Nishanaat mojood hain. Baraye meharbani FIR darj karke maweshi ki barambadgi ki jaye.

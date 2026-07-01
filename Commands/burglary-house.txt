@@ -1,0 +1,3 @@
+# House Burglary at Night
+
+Aaj {date} ki raat {time} baje jab main aur mere ghar walay so rahe thay, chor peechay ki khirki tor kar andar aa gaye. Subah uth kar dekha to almari se {amount} rupay cash, sona ({gold} tola) aur laptop, mobile phone gaib the. Kitchen ke dwar par ungliyon ke nishaan mojood hain. Aas paas kisi ne kuch nahin dekha. Baraye meharbani PPC 380/457 ke tehat FIR darj kar ke tafteesh shuru ki jaye.
