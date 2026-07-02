@@ -846,6 +846,7 @@
 .glass-input,
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
 textarea,
+select,
 [data-slot="select-trigger"],
 button[role="combobox"] {
   background: var(--wg-bg) !important;
@@ -859,6 +860,7 @@ button[role="combobox"] {
 .glass-input:focus,
 input:focus,
 textarea:focus,
+select:focus,
 [data-slot="select-trigger"]:focus,
 button[role="combobox"]:focus {
   border-color: var(--ring) !important;
