@@ -21,6 +21,9 @@ const ROUTES: Record<string, string> = {
   "signout":     "auth/v1/logout",
 };
 
+// Sentinel handled without upstream fetch.
+const HEALTH_KEY = "health";
+
 function getUpstream(): string {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   if (!url) throw new Error("SUPABASE_URL not configured");
@@ -40,6 +43,36 @@ async function handle(request: Request, splat: string): Promise<Response> {
   }
 
   const segment = splat.replace(/^\/+/, "").split("/")[0] ?? "";
+
+  if (segment === HEALTH_KEY) {
+    const started = Date.now();
+    let upstreamOk = false;
+    let upstreamMs: number | null = null;
+    let upstreamStatus: number | null = null;
+    try {
+      const base = getUpstream();
+      const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+      const t0 = Date.now();
+      const r = await fetch(`${base}/rest/v1/`, { headers: { apikey: key } });
+      upstreamMs = Date.now() - t0;
+      upstreamStatus = r.status;
+      upstreamOk = r.ok || r.status === 404; // PostgREST root often 404s but proves reachability
+    } catch {
+      upstreamOk = false;
+    }
+    const body = {
+      ok: upstreamOk,
+      service: "sceneiq-api",
+      version: "v1",
+      ssr: true,
+      upstream: { ok: upstreamOk, status: upstreamStatus, latency_ms: upstreamMs },
+      total_ms: Date.now() - started,
+      timestamp: new Date().toISOString(),
+    };
+    const h = cors(new Headers({ "content-type": "application/json", "cache-control": "no-store" }));
+    return new Response(JSON.stringify(body), { status: upstreamOk ? 200 : 503, headers: h });
+  }
+
   const mapped = ROUTES[segment];
   if (!mapped) return new Response(JSON.stringify({ error: "Unknown endpoint" }), { status: 404, headers: cors(new Headers({ "content-type": "application/json" })) });
 
