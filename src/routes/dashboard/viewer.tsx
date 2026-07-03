@@ -31,7 +31,7 @@ import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useServerFn } from "@tanstack/react-start";
-import { queueVideoGeneration } from "@/lib/video.functions";
+import { queueVideoGeneration, uploadRenderedVideo } from "@/lib/video.functions";
 import { logAuditEvent } from "@/lib/audit.functions";
 import { exportCourtReportPDF } from "@/lib/pdf-export";
 import { EvidenceManager } from "@/components/EvidenceManager";
@@ -66,7 +66,9 @@ function SceneViewer() {
   const [showSource, setShowSource] = useState(false);
   const [tab, setTab] = useState<"scene" | "video" | "evidence" | "source">("scene");
   const queueVideoFn = useServerFn(queueVideoGeneration);
+  const uploadVideoFn = useServerFn(uploadRenderedVideo);
   const logFn = useServerFn(logAuditEvent);
+  const [recording, setRecording] = useState(false);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
@@ -203,14 +205,59 @@ function SceneViewer() {
 
   const handleGenerateVideo = useCallback(async () => {
     if (!jobId) return;
+    if (events.length === 0) { toast.error("No scene events to render"); return; }
+
+    // Ensure we're on the 3D tab so the canvas is mounted & visible.
+    setTab("scene");
+    // Restart playback from event 0 so recording captures the whole story.
+    setCurrentEvent(0);
+    setPlaying(true);
+    setRecording(true);
+
+    const durationSec = Math.min(30, Math.max(6, events.length * 2 + 2));
+
+    // Wait for the canvas to mount, then start recording.
+    await new Promise((r) => setTimeout(r, 400));
+
     try {
       await queueVideoFn({ data: { jobId } });
-      await logFn({ data: { action: "video.queue", entityType: "fir_job", entityId: jobId } }).catch(() => {});
-      toast.success("AI video queued — 10s 3D incident clip will appear when ready");
+      toast.info(`Recording ${durationSec}s scene playthrough…`);
+
+      const blob: Blob = await new Promise((resolve, reject) => {
+        const onBlob = (e: Event) => {
+          window.removeEventListener("sceneiq:record-blob", onBlob);
+          resolve((e as CustomEvent).detail.blob as Blob);
+        };
+        window.addEventListener("sceneiq:record-blob", onBlob);
+        window.dispatchEvent(new CustomEvent("sceneiq:record-start", { detail: { durationSec } }));
+        setTimeout(() => {
+          window.removeEventListener("sceneiq:record-blob", onBlob);
+          reject(new Error("Recording timed out"));
+        }, (durationSec + 8) * 1000);
+      });
+
+      toast.info(`Uploading ${(blob.size / 1024 / 1024).toFixed(1)} MB…`);
+
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Read failed"));
+        reader.readAsDataURL(blob);
+      });
+
+      const res = await uploadVideoFn({
+        data: { jobId, base64, mime: blob.type || "video/webm", durationSec },
+      });
+      await logFn({ data: { action: "video.rendered", entityType: "fir_job", entityId: jobId, metadata: { url: res.url } } }).catch(() => {});
+      toast.success("3D incident video generated");
+      setTab("video");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to queue video");
+    } finally {
+      setRecording(false);
+      setPlaying(false);
     }
-  }, [jobId, queueVideoFn, logFn]);
+  }, [jobId, events.length, queueVideoFn, uploadVideoFn, logFn, setCurrentEvent, setPlaying]);
 
   const handlePdfExport = useCallback(async () => {
     if (!firRec) { toast.error("FIR data not loaded yet"); return; }
@@ -358,7 +405,7 @@ function SceneViewer() {
                   <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
                   <button onClick={handleGenerateVideo} disabled={videoStatus === "queued" || videoStatus === "processing"}
                     className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
-                    <Sparkles className="h-4 w-4" /> {videoStatus === "queued" ? "Queued…" : "Generate 10s Video"}
+                    <Sparkles className="h-4 w-4" /> {recording ? "Recording…" : "Generate 3D Video"}
                   </button>
                 </div>
               )}
