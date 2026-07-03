@@ -1,6 +1,6 @@
 import { useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Html, Environment, ContactShadows, Sky } from "@react-three/drei";
+import { OrbitControls, Grid, Html, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
