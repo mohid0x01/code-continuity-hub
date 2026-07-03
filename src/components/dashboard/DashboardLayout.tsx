@@ -21,6 +21,7 @@ import { useNotificationWire } from "@/hooks/useNotificationWire";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "@tanstack/react-router";
+import { SystemStatusBadge } from "@/components/SystemStatusBadge";
 
 const navItems = [
   { label: "Dashboard Overview", icon: LayoutDashboard, href: "/dashboard" },
@@ -163,6 +164,7 @@ export function DashboardHeader() {
         </p>
       </div>
       <div className="flex items-center gap-4">
+        <SystemStatusBadge />
         <button
           onClick={toggle}
           aria-label="Toggle theme"
