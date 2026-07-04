@@ -884,6 +884,61 @@ button[role="combobox"]:focus {
   -webkit-backdrop-filter: blur(10px) !important;
 }
 
+/* ── Water Glass Tabs (Radix) ── */
+[data-slot="tabs-list"],
+[role="tablist"] {
+  background: var(--wg-bg) !important;
+  border: 1px solid var(--wg-border) !important;
+  backdrop-filter: blur(14px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(130%) !important;
+  box-shadow: var(--wg-shadow) !important;
+  border-radius: 6px !important;
+  padding: 4px !important;
+  gap: 2px;
+}
+[data-slot="tabs-trigger"],
+[role="tab"] {
+  color: var(--color-text-secondary) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  transition: all 220ms ease;
+}
+[data-slot="tabs-trigger"]:hover,
+[role="tab"]:hover {
+  color: var(--color-text-primary) !important;
+  background: var(--wg-highlight) !important;
+}
+[data-slot="tabs-trigger"][data-state="active"],
+[role="tab"][aria-selected="true"] {
+  background: linear-gradient(180deg, var(--wg-highlight), transparent) !important;
+  border-color: var(--wg-hover-border) !important;
+  color: var(--color-gold) !important;
+  box-shadow: inset 0 1px 0 var(--wg-highlight), 0 2px 8px hsl(0 0% 0% / 0.15) !important;
+}
+
+/* Sidebar item active state respects theme */
+.light [data-sidebar="menu-button"][data-active="true"] {
+  background: hsl(0 0% 0% / 0.06) !important;
+  color: hsl(0 0% 0%) !important;
+}
+
+/* Ensure card & popover foreground stays readable in light mode */
+.light [data-slot="card"],
+.light [data-slot="dialog-content"],
+.light [data-slot="popover-content"],
+.light [data-slot="dropdown-menu-content"],
+.light [data-slot="select-content"] {
+  color: hsl(0 0% 0%) !important;
+}
+.light .text-text-primary { color: hsl(0 0% 0%) !important; }
+.light .text-text-secondary { color: hsl(0 0% 20%) !important; }
+.light .text-text-muted { color: hsl(0 0% 40%) !important; }
+.light .bg-background\/80,
+.light .bg-background\/60 {
+  background-color: hsl(0 0% 100% / 0.75) !important;
+}
+
 /* ── Gradient text uses theme accent ── */
 .text-gradient-gold,
 .text-gradient,

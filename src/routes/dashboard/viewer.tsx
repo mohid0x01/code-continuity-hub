@@ -203,6 +203,23 @@ function SceneViewer() {
   const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
   const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
 
+  // Primary FIR pin extracted from the officer-selected location on submit.
+  const primaryPin = (() => {
+    const lat = firRec?.latitude as number | null | undefined;
+    const lng = firRec?.longitude as number | null | undefined;
+    if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const area = (firRec?.area as string | null | undefined) ?? "";
+    const city = (firRec?.city as string | null | undefined) ?? "";
+    const label = [area, city].filter(Boolean).join(", ") || "Incident Location";
+    return { label, lat, lng, description: (firRec?.formatted_address as string | null | undefined) ?? undefined };
+  })();
+
+  const mapLocations = () => geocodeFirText(
+    firText,
+    locationEntities.map((l) => l.label),
+    { primary: primaryPin },
+  );
+
   const handleGenerateVideo = useCallback(async () => {
     if (!jobId) return;
     if (events.length === 0) { toast.error("No scene events to render"); return; }
@@ -343,7 +360,7 @@ function SceneViewer() {
             <Suspense fallback={<div className="h-[260px] animate-pulse rounded-[6px] bg-surface" />}>
               <CrimeMap
                 height="260px"
-                 locations={geocodeFirText(firText, locationEntities.map((l) => l.label))}
+                 locations={mapLocations()}
               />
             </Suspense>
             <p className="mt-2 text-[10px] text-text-muted">
@@ -420,7 +437,7 @@ function SceneViewer() {
               <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-[6px] border border-border-subtle bg-background/60 p-4 text-[12px] leading-relaxed text-text-secondary">{firText || "No narrative."}</pre>
               <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">Real-World Location</h3>
               <Suspense fallback={<div className="mt-3 h-[300px] animate-pulse rounded-[6px] bg-surface" />}>
-                <div className="mt-3"><CrimeMap height="320px" locations={geocodeFirText(firText, locationEntities.map((l) => l.label))} /></div>
+                <div className="mt-3"><CrimeMap height="320px" locations={mapLocations()} /></div>
               </Suspense>
             </div>
           )}

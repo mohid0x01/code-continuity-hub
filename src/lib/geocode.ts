@@ -47,9 +47,38 @@ const PLACE_DB: Record<string, [number, number]> = {
   gilgit: [35.9208, 74.3144], skardu: [35.2971, 75.6333], hunza: [36.3167, 74.6500],
 };
 
-export function geocodeFirText(text: string, fallbackLabels: string[] = []): CrimeLocation[] {
+export interface GeocodeOptions {
+  /** The primary FIR location picked by the officer (exact lat/lng). Always pinned first. */
+  primary?: { label: string; lat: number; lng: number; description?: string } | null;
+}
+
+/**
+ * Extract every location pin the map should show:
+ *  1. The primary FIR pin (exact coords from the location picker) — always first if given.
+ *  2. Every Pakistani city/district mentioned in the narrative (deduped).
+ *  3. Every AI-extracted scene location entity — scattered around the primary
+ *     pin so they don't collapse into a single marker.
+ */
+export function geocodeFirText(
+  text: string,
+  fallbackLabels: string[] = [],
+  options: GeocodeOptions = {},
+): CrimeLocation[] {
   const found: CrimeLocation[] = [];
   const seen = new Set<string>();
+
+  // 1) Primary FIR pin
+  if (options.primary && Number.isFinite(options.primary.lat) && Number.isFinite(options.primary.lng)) {
+    found.push({
+      label: options.primary.label || "Incident Location",
+      lat: options.primary.lat,
+      lng: options.primary.lng,
+      description: options.primary.description ?? "Primary FIR location",
+    });
+    seen.add((options.primary.label || "").toLowerCase());
+  }
+
+  // 2) Cities/districts referenced in the narrative
   const blob = (text + " " + fallbackLabels.join(" ")).toLowerCase();
   for (const [name, coords] of Object.entries(PLACE_DB)) {
     if (blob.includes(name) && !seen.has(name)) {
@@ -62,19 +91,27 @@ export function geocodeFirText(text: string, fallbackLabels: string[] = []): Cri
       });
     }
   }
-  if (found.length > 0) {
+
+  // 3) AI-extracted scene locations — scatter around the anchor pin
+  const anchor = found[0];
+  if (anchor) {
     fallbackLabels.forEach((lbl, i) => {
-      if (!found.some((f) => f.label.toLowerCase() === lbl.toLowerCase())) {
-        found.push({
-          label: lbl,
-          lat: found[0].lat + (i + 1) * 0.003,
-          lng: found[0].lng + (i + 1) * 0.003,
-          description: "Scene entity",
-        });
-      }
+      const key = lbl.toLowerCase();
+      if (seen.has(key)) return;
+      if (found.some((f) => f.label.toLowerCase() === key)) return;
+      // Deterministic ring scatter (~300-800m) so multiple scene points render distinctly.
+      const angle = (i * 137.508) * (Math.PI / 180); // golden-angle
+      const radius = 0.004 + (i % 4) * 0.0025;       // ~450m..1.3km
+      seen.add(key);
+      found.push({
+        label: lbl,
+        lat: anchor.lat + Math.cos(angle) * radius,
+        lng: anchor.lng + Math.sin(angle) * radius,
+        description: "Scene entity (AI-extracted)",
+      });
     });
   } else {
-    // Default to Khairpur if nothing matched
+    // Nothing matched at all → fallback so the map still renders.
     found.push({
       label: fallbackLabels[0] || "Khairpur",
       lat: 27.5295,
@@ -82,5 +119,6 @@ export function geocodeFirText(text: string, fallbackLabels: string[] = []): Cri
       description: "Default district (no precise place matched in FIR)",
     });
   }
+
   return found;
 }

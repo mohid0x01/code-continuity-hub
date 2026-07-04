@@ -180,6 +180,7 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
   return (
     <Canvas
       shadows
+      dpr={[1.25, 2]}
       camera={{ position: [12, 10, 12], fov: 45, near: 0.1, far: 200 }}
       style={{ background: "linear-gradient(180deg, #0a1220 0%, #050810 100%)", width: "100%", height: "100%" }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
@@ -263,22 +264,28 @@ function RecorderBridge() {
     const onStart = async (e: Event) => {
       const detail = (e as CustomEvent).detail as { durationSec: number };
       const canvas = gl.domElement as HTMLCanvasElement;
-      const stream = canvas.captureStream(30);
+      const stream = canvas.captureStream(60);
+      // Prefer high-quality H.264 MP4 (Safari-native) → VP9 → VP8 → generic WebM.
       const candidates = [
-        "video/mp4;codecs=avc1.42E01E",
+        "video/mp4;codecs=avc1.640028", // H.264 High @ Level 4.0
+        "video/mp4;codecs=avc1.42E01E", // H.264 Baseline
+        "video/mp4",
+        "video/webm;codecs=vp9,opus",
         "video/webm;codecs=vp9",
         "video/webm;codecs=vp8",
         "video/webm",
       ];
-      const mime = candidates.find((c) => (window as unknown as { MediaRecorder: typeof MediaRecorder }).MediaRecorder.isTypeSupported(c)) || "video/webm";
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+      const MR = (window as unknown as { MediaRecorder: typeof MediaRecorder }).MediaRecorder;
+      const mime = candidates.find((c) => MR.isTypeSupported(c)) || "video/webm";
+      // 10 Mbps for crisp 1080p-ish canvas capture with role-tinted geometry.
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10_000_000 });
       const chunks: BlobPart[] = [];
       rec.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
       rec.onstop = () => {
         const blob = new Blob(chunks, { type: mime });
         window.dispatchEvent(new CustomEvent("sceneiq:record-blob", { detail: { blob, mime } }));
       };
-      rec.start(200);
+      rec.start(100);
       setTimeout(() => rec.stop(), Math.max(2000, detail.durationSec * 1000));
     };
     window.addEventListener("sceneiq:record-start", onStart);
