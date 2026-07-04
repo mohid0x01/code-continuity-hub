@@ -180,6 +180,7 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
   return (
     <Canvas
       shadows
+      dpr={[1.25, 2]}
       camera={{ position: [12, 10, 12], fov: 45, near: 0.1, far: 200 }}
       style={{ background: "linear-gradient(180deg, #0a1220 0%, #050810 100%)", width: "100%", height: "100%" }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
