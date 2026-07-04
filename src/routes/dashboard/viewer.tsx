@@ -203,6 +203,23 @@ function SceneViewer() {
   const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
   const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
 
+  // Primary FIR pin extracted from the officer-selected location on submit.
+  const primaryPin = (() => {
+    const lat = firRec?.latitude as number | null | undefined;
+    const lng = firRec?.longitude as number | null | undefined;
+    if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const area = (firRec?.area as string | null | undefined) ?? "";
+    const city = (firRec?.city as string | null | undefined) ?? "";
+    const label = [area, city].filter(Boolean).join(", ") || "Incident Location";
+    return { label, lat, lng, description: (firRec?.formatted_address as string | null | undefined) ?? undefined };
+  })();
+
+  const mapLocations = () => geocodeFirText(
+    firText,
+    locationEntities.map((l) => l.label),
+    { primary: primaryPin },
+  );
+
   const handleGenerateVideo = useCallback(async () => {
     if (!jobId) return;
     if (events.length === 0) { toast.error("No scene events to render"); return; }
