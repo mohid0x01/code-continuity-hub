@@ -53,10 +53,14 @@ async function handle(request: Request, splat: string): Promise<Response> {
       const base = getUpstream();
       const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
       const t0 = Date.now();
-      const r = await fetch(`${base}/rest/v1/`, { headers: { apikey: key } });
+      const r = await fetch(`${base}/rest/v1/`, {
+        headers: { apikey: key, authorization: `Bearer ${key}` },
+      });
       upstreamMs = Date.now() - t0;
       upstreamStatus = r.status;
-      upstreamOk = r.ok || r.status === 404; // PostgREST root often 404s but proves reachability
+      // Any HTTP response (even 401/404) proves the upstream is reachable.
+      // Only a network failure / 5xx counts as "down".
+      upstreamOk = r.status < 500;
     } catch {
       upstreamOk = false;
     }
