@@ -360,7 +360,7 @@ function SceneViewer() {
             <Suspense fallback={<div className="h-[260px] animate-pulse rounded-[6px] bg-surface" />}>
               <CrimeMap
                 height="260px"
-                 locations={geocodeFirText(firText, locationEntities.map((l) => l.label))}
+                 locations={mapLocations()}
               />
             </Suspense>
             <p className="mt-2 text-[10px] text-text-muted">
@@ -437,7 +437,7 @@ function SceneViewer() {
               <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-[6px] border border-border-subtle bg-background/60 p-4 text-[12px] leading-relaxed text-text-secondary">{firText || "No narrative."}</pre>
               <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.15em] text-text-secondary">Real-World Location</h3>
               <Suspense fallback={<div className="mt-3 h-[300px] animate-pulse rounded-[6px] bg-surface" />}>
-                <div className="mt-3"><CrimeMap height="320px" locations={geocodeFirText(firText, locationEntities.map((l) => l.label))} /></div>
+                <div className="mt-3"><CrimeMap height="320px" locations={mapLocations()} /></div>
               </Suspense>
             </div>
           )}
