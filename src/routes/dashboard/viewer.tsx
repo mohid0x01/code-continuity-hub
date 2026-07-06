@@ -234,10 +234,12 @@ function SceneViewer() {
     const durationSec = Math.min(30, Math.max(6, events.length * 2 + 2));
 
     // Wait for the canvas to mount, then start recording.
-    await new Promise((r) => setTimeout(r, 400));
+    // Longer wait ensures RecorderBridge (mounted inside <Canvas>) is live
+    // after switching to the "scene" tab — otherwise record-start fires with
+    // no listener and the promise below times out, leaving video_status="queued".
+    await new Promise((r) => setTimeout(r, 900));
 
     try {
-      await queueVideoFn({ data: { jobId } });
       toast.info(`Recording ${durationSec}s scene playthrough…`);
 
       const blob: Blob = await new Promise((resolve, reject) => {
@@ -269,6 +271,8 @@ function SceneViewer() {
       toast.success("3D incident video generated");
       setTab("video");
     } catch (e) {
+      // Reset any stale queued state so the button becomes clickable again.
+      try { await queueVideoFn({ data: { jobId } }); } catch { /* noop */ }
       toast.error(e instanceof Error ? e.message : "Failed to queue video");
     } finally {
       setRecording(false);
