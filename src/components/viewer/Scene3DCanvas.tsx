@@ -1,6 +1,6 @@
 import { useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Html, Environment, ContactShadows } from "@react-three/drei";
+import { OrbitControls, Html, Environment, ContactShadows, Sky, Cloud } from "@react-three/drei";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
@@ -13,9 +13,29 @@ interface Scene3DCanvasProps {
   events: SceneEvent[];
 }
 
-function EntityFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const groupRef = useRef<THREE.Group>(null);
+// Deterministic PRNG so procedural props stay stable between frames/renders.
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Fully-articulated humanoid rig built from primitives — head, neck, torso,
+ * hips, upper/lower arms with hands, and upper/lower legs with feet. Limbs
+ * swing on a sine wave keyed to movement speed so the figure "walks" between
+ * event positions instead of sliding like a capsule.
+ */
+function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
+  const rootRef = useRef<THREE.Group>(null);
+  const leftArmRef = useRef<THREE.Group>(null);
+  const rightArmRef = useRef<THREE.Group>(null);
+  const leftLegRef = useRef<THREE.Group>(null);
+  const rightLegRef = useRef<THREE.Group>(null);
+  const torsoRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((s) => s.currentEvent);
 
   // Compute position per event from events data
@@ -37,61 +57,368 @@ function EntityFigure({ entity, events }: { entity: SceneEntity; events: SceneEv
 
   const targetPos = useMemo(() => {
     const p = positions[Math.min(currentEvent, positions.length - 1)];
-    return new THREE.Vector3(p[0], p[1] + 0.75, p[2]);
+    return new THREE.Vector3(p[0], p[1], p[2]);
   }, [currentEvent, positions]);
 
-  useFrame(({ clock }) => {
-    if (meshRef.current) {
-      meshRef.current.position.lerp(targetPos, 0.08);
-      // Face direction of motion
-      const dir = new THREE.Vector3().subVectors(targetPos, meshRef.current.position);
-      if (dir.lengthSq() > 0.001) {
-        const angle = Math.atan2(dir.x, dir.z);
-        meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, angle, 0.1);
-      }
-      // Subtle idle bob
-      meshRef.current.position.y = targetPos.y + Math.sin(clock.getElapsedTime() * 3) * 0.03;
+  const speedRef = useRef(0);
+
+  useFrame((_, delta) => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const prev = root.position.clone();
+    root.position.lerp(targetPos, 0.06);
+    const moved = root.position.distanceTo(prev);
+    // EMA on step speed so animation blends in/out cleanly
+    speedRef.current = THREE.MathUtils.lerp(speedRef.current, moved / Math.max(delta, 1 / 120), 0.15);
+
+    const dir = new THREE.Vector3().subVectors(targetPos, root.position);
+    if (dir.lengthSq() > 0.0004) {
+      const angle = Math.atan2(dir.x, dir.z);
+      root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, angle, 0.12);
     }
+
+    // Walk cycle — swing arms and legs proportional to travel speed.
+    const t = performance.now() / 1000;
+    const swing = Math.min(speedRef.current * 1.6, 1);
+    const cycle = Math.sin(t * 6);
+    if (leftLegRef.current) leftLegRef.current.rotation.x = cycle * 0.75 * swing;
+    if (rightLegRef.current) rightLegRef.current.rotation.x = -cycle * 0.75 * swing;
+    if (leftArmRef.current) leftArmRef.current.rotation.x = -cycle * 0.6 * swing;
+    if (rightArmRef.current) rightArmRef.current.rotation.x = cycle * 0.6 * swing;
+    if (torsoRef.current) torsoRef.current.position.y = 0.9 + Math.abs(cycle) * 0.04 * swing;
   });
 
-  const color = entity.color || "#C9A84C";
   const roleTint = entity.entity_role === "suspect" ? "#ef4444"
     : entity.entity_role === "victim" ? "#3b82f6"
     : entity.entity_role === "witness" ? "#22c55e"
-    : color;
+    : entity.color || "#C9A84C";
+
+  const skin = "#d9b48a";
+  const pants = "#1e293b";
+  const hair = "#181410";
 
   return (
-    <group ref={groupRef}>
-      <mesh ref={meshRef} castShadow position={[positions[0][0], positions[0][1] + 0.75, positions[0][2]]}>
-        {/* Torso */}
-        <capsuleGeometry args={[0.22, 0.7, 12, 24]} />
-        <meshStandardMaterial color={roleTint} roughness={0.55} metalness={0.15} />
+    <group ref={rootRef} position={[positions[0][0], 0, positions[0][2]]}>
+      {/* Hip pivot */}
+      <group ref={torsoRef} position={[0, 0.9, 0]}>
+        {/* Torso / shirt */}
+        <mesh castShadow position={[0, 0.05, 0]}>
+          <capsuleGeometry args={[0.16, 0.45, 8, 16]} />
+          <meshStandardMaterial color={roleTint} roughness={0.6} metalness={0.05} />
+        </mesh>
+        {/* Neck */}
+        <mesh castShadow position={[0, 0.4, 0]}>
+          <cylinderGeometry args={[0.055, 0.065, 0.09, 12]} />
+          <meshStandardMaterial color={skin} roughness={0.75} />
+        </mesh>
         {/* Head */}
-        <mesh position={[0, 0.65, 0]} castShadow>
-          <sphereGeometry args={[0.18, 24, 24]} />
-          <meshStandardMaterial color="#e8c9a0" roughness={0.7} metalness={0.05} />
+        <mesh castShadow position={[0, 0.55, 0]}>
+          <sphereGeometry args={[0.13, 24, 24]} />
+          <meshStandardMaterial color={skin} roughness={0.72} />
         </mesh>
-        {/* Shoulder pads / arms */}
-        <mesh position={[0.28, 0.15, 0]} castShadow>
-          <sphereGeometry args={[0.09, 12, 12]} />
-          <meshStandardMaterial color={roleTint} roughness={0.6} />
+        {/* Hair cap */}
+        <mesh castShadow position={[0, 0.63, -0.01]} rotation={[0.1, 0, 0]}>
+          <sphereGeometry args={[0.135, 20, 20, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color={hair} roughness={0.9} />
         </mesh>
-        <mesh position={[-0.28, 0.15, 0]} castShadow>
-          <sphereGeometry args={[0.09, 12, 12]} />
-          <meshStandardMaterial color={roleTint} roughness={0.6} />
+        {/* Eyes */}
+        <mesh position={[0.045, 0.56, 0.115]}>
+          <sphereGeometry args={[0.014, 8, 8]} />
+          <meshStandardMaterial color="#0b0b0b" />
         </mesh>
-        {/* Direction indicator */}
-        <mesh position={[0, 0, 0.22]}>
-          <coneGeometry args={[0.06, 0.14, 8]} />
-          <meshStandardMaterial color={roleTint} emissive={roleTint} emissiveIntensity={0.9} />
+        <mesh position={[-0.045, 0.56, 0.115]}>
+          <sphereGeometry args={[0.014, 8, 8]} />
+          <meshStandardMaterial color="#0b0b0b" />
         </mesh>
-        <Html distanceFactor={12} position={[0, 1.15, 0]} center>
-          <div className="rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
-               style={{ color: roleTint, borderColor: roleTint, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}>
-            {entity.label}
-          </div>
-        </Html>
+
+        {/* Left arm */}
+        <group ref={leftArmRef} position={[0.22, 0.28, 0]}>
+          <mesh castShadow position={[0, -0.18, 0]}>
+            <capsuleGeometry args={[0.055, 0.28, 6, 12]} />
+            <meshStandardMaterial color={roleTint} roughness={0.6} />
+          </mesh>
+          <mesh castShadow position={[0, -0.42, 0]}>
+            <capsuleGeometry args={[0.05, 0.22, 6, 12]} />
+            <meshStandardMaterial color={skin} roughness={0.75} />
+          </mesh>
+        </group>
+        {/* Right arm */}
+        <group ref={rightArmRef} position={[-0.22, 0.28, 0]}>
+          <mesh castShadow position={[0, -0.18, 0]}>
+            <capsuleGeometry args={[0.055, 0.28, 6, 12]} />
+            <meshStandardMaterial color={roleTint} roughness={0.6} />
+          </mesh>
+          <mesh castShadow position={[0, -0.42, 0]}>
+            <capsuleGeometry args={[0.05, 0.22, 6, 12]} />
+            <meshStandardMaterial color={skin} roughness={0.75} />
+          </mesh>
+        </group>
+      </group>
+
+      {/* Left leg */}
+      <group ref={leftLegRef} position={[0.09, 0.85, 0]}>
+        <mesh castShadow position={[0, -0.24, 0]}>
+          <capsuleGeometry args={[0.07, 0.44, 6, 12]} />
+          <meshStandardMaterial color={pants} roughness={0.7} />
+        </mesh>
+        <mesh castShadow position={[0, -0.6, 0.06]}>
+          <boxGeometry args={[0.14, 0.06, 0.22]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.5} />
+        </mesh>
+      </group>
+      {/* Right leg */}
+      <group ref={rightLegRef} position={[-0.09, 0.85, 0]}>
+        <mesh castShadow position={[0, -0.24, 0]}>
+          <capsuleGeometry args={[0.07, 0.44, 6, 12]} />
+          <meshStandardMaterial color={pants} roughness={0.7} />
+        </mesh>
+        <mesh castShadow position={[0, -0.6, 0.06]}>
+          <boxGeometry args={[0.14, 0.06, 0.22]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.5} />
+        </mesh>
+      </group>
+
+      <Html distanceFactor={12} position={[0, 2.05, 0]} center>
+        <div className="rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
+             style={{ color: roleTint, borderColor: roleTint, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+          {entity.label}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+/**
+ * Procedural city block — asphalt roads with lane markings, sidewalks with
+ * curbs, varied buildings with lit windows, trees, streetlights, benches,
+ * and parked cars. Seeded so the layout is stable frame-to-frame.
+ */
+function CityEnvironment() {
+  const rng = useMemo(() => mulberry32(1337), []);
+  const buildings = useMemo(() => {
+    const items: {
+      pos: [number, number, number];
+      size: [number, number, number];
+      color: string;
+      windows: { rows: number; cols: number; lit: boolean[] };
+    }[] = [];
+    const palette = ["#8a99ab", "#c8b28d", "#a8836a", "#6b7f96", "#b8a17e", "#7a8a9a"];
+    // Two rows of buildings flanking the main road (Z axis)
+    for (let side = -1; side <= 1; side += 2) {
+      for (let i = -3; i <= 3; i++) {
+        const w = 3 + rng() * 1.5;
+        const d = 3 + rng() * 1.5;
+        const h = 4 + rng() * 8;
+        const z = i * 5 + (rng() - 0.5) * 0.5;
+        const x = side * (8 + rng() * 1.5);
+        const rows = Math.max(2, Math.floor(h / 1.1));
+        const cols = Math.max(2, Math.floor(w / 0.8));
+        const lit: boolean[] = [];
+        for (let k = 0; k < rows * cols; k++) lit.push(rng() > 0.45);
+        items.push({
+          pos: [x, h / 2, z],
+          size: [w, h, d],
+          color: palette[Math.floor(rng() * palette.length)],
+          windows: { rows, cols, lit },
+        });
+      }
+    }
+    return items;
+  }, [rng]);
+
+  const trees = useMemo(() => {
+    const items: { pos: [number, number, number]; scale: number }[] = [];
+    for (let i = 0; i < 26; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = side * (4.2 + rng() * 0.6);
+      const z = -18 + i * 1.5 + (rng() - 0.5) * 0.4;
+      items.push({ pos: [x, 0, z], scale: 0.85 + rng() * 0.5 });
+    }
+    return items;
+  }, [rng]);
+
+  const streetlights = useMemo(() => {
+    const items: [number, number, number][] = [];
+    for (let i = -4; i <= 4; i++) {
+      items.push([-4.5, 0, i * 4]);
+      items.push([4.5, 0, i * 4]);
+    }
+    return items;
+  }, []);
+
+  const cars = useMemo(() => {
+    const items: { pos: [number, number, number]; rot: number; color: string }[] = [];
+    const colors = ["#c53030", "#1f2937", "#f5f5f4", "#0ea5e9", "#facc15"];
+    for (let i = 0; i < 5; i++) {
+      items.push({
+        pos: [(i % 2 === 0 ? -1 : 1) * (5.8 + rng() * 0.2), 0, -12 + i * 5 + rng()],
+        rot: i % 2 === 0 ? Math.PI / 2 : -Math.PI / 2,
+        color: colors[Math.floor(rng() * colors.length)],
+      });
+    }
+    return items;
+  }, [rng]);
+
+  return (
+    <group>
+      {/* Ground (grass fields far out) */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[200, 200]} />
+        <meshStandardMaterial color="#3f5b3a" roughness={1} />
       </mesh>
+      {/* Main asphalt road (Z-axis) */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <planeGeometry args={[6, 200]} />
+        <meshStandardMaterial color="#1a1d22" roughness={0.95} />
+      </mesh>
+      {/* Cross road (X-axis) */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.011, 0]}>
+        <planeGeometry args={[200, 6]} />
+        <meshStandardMaterial color="#1a1d22" roughness={0.95} />
+      </mesh>
+      {/* Center dashed lane markings */}
+      {Array.from({ length: 40 }).map((_, i) => (
+        <mesh key={`ln-z-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -40 + i * 2]}>
+          <planeGeometry args={[0.12, 0.8]} />
+          <meshBasicMaterial color="#f8fafc" />
+        </mesh>
+      ))}
+      {Array.from({ length: 40 }).map((_, i) => (
+        <mesh key={`ln-x-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-40 + i * 2, 0.021, 0]}>
+          <planeGeometry args={[0.8, 0.12]} />
+          <meshBasicMaterial color="#f8fafc" />
+        </mesh>
+      ))}
+      {/* Sidewalks */}
+      {[-1, 1].map((s) => (
+        <mesh key={`sw-z-${s}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[s * 4, 0.05, 0]}>
+          <planeGeometry args={[2, 200]} />
+          <meshStandardMaterial color="#9ca3af" roughness={0.9} />
+        </mesh>
+      ))}
+      {[-1, 1].map((s) => (
+        <mesh key={`sw-x-${s}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, s * 4]}>
+          <planeGeometry args={[200, 2]} />
+          <meshStandardMaterial color="#9ca3af" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* Curbs */}
+      {[-1, 1].map((s) => (
+        <mesh key={`curb-z-${s}`} castShadow receiveShadow position={[s * 3.05, 0.075, 0]}>
+          <boxGeometry args={[0.1, 0.15, 200]} />
+          <meshStandardMaterial color="#6b7280" roughness={0.9} />
+        </mesh>
+      ))}
+
+      {/* Buildings with window rows */}
+      {buildings.map((b, i) => (
+        <group key={`bld-${i}`} position={b.pos}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={b.size} />
+            <meshStandardMaterial color={b.color} roughness={0.75} />
+          </mesh>
+          {/* Windows — front facade */}
+          {Array.from({ length: b.windows.rows }).map((_, row) =>
+            Array.from({ length: b.windows.cols }).map((_, col) => {
+              const wx = -b.size[0] / 2 + 0.4 + col * ((b.size[0] - 0.8) / Math.max(1, b.windows.cols - 1));
+              const wy = -b.size[1] / 2 + 0.9 + row * 1.1;
+              const lit = b.windows.lit[row * b.windows.cols + col];
+              return (
+                <mesh key={`w-${row}-${col}`} position={[wx, wy, b.size[2] / 2 + 0.01]}>
+                  <planeGeometry args={[0.35, 0.55]} />
+                  <meshStandardMaterial
+                    color={lit ? "#ffe27a" : "#0f172a"}
+                    emissive={lit ? "#ffb84a" : "#000000"}
+                    emissiveIntensity={lit ? 0.7 : 0}
+                  />
+                </mesh>
+              );
+            }),
+          )}
+          {/* Roof cap */}
+          <mesh castShadow position={[0, b.size[1] / 2 + 0.05, 0]}>
+            <boxGeometry args={[b.size[0] + 0.2, 0.1, b.size[2] + 0.2]} />
+            <meshStandardMaterial color="#3b3b3b" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Trees — trunk + layered foliage */}
+      {trees.map((t, i) => (
+        <group key={`tree-${i}`} position={t.pos} scale={t.scale}>
+          <mesh castShadow position={[0, 0.6, 0]}>
+            <cylinderGeometry args={[0.09, 0.13, 1.2, 8]} />
+            <meshStandardMaterial color="#5b3a20" roughness={0.95} />
+          </mesh>
+          <mesh castShadow position={[0, 1.5, 0]}>
+            <icosahedronGeometry args={[0.75, 1]} />
+            <meshStandardMaterial color="#2f6a3a" roughness={0.85} flatShading />
+          </mesh>
+          <mesh castShadow position={[0.25, 1.85, 0.15]}>
+            <icosahedronGeometry args={[0.5, 1]} />
+            <meshStandardMaterial color="#3a7f45" roughness={0.85} flatShading />
+          </mesh>
+          <mesh castShadow position={[-0.2, 1.75, -0.15]}>
+            <icosahedronGeometry args={[0.55, 1]} />
+            <meshStandardMaterial color="#276b34" roughness={0.85} flatShading />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Streetlights */}
+      {streetlights.map((p, i) => (
+        <group key={`sl-${i}`} position={p}>
+          <mesh castShadow position={[0, 1.6, 0]}>
+            <cylinderGeometry args={[0.04, 0.05, 3.2, 8]} />
+            <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
+          </mesh>
+          <mesh castShadow position={[0.3, 3.15, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.6, 8]} />
+            <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
+          </mesh>
+          <mesh position={[0.6, 3.05, 0]}>
+            <sphereGeometry args={[0.13, 12, 12]} />
+            <meshStandardMaterial color="#fff2b3" emissive="#ffcf6a" emissiveIntensity={1.6} />
+          </mesh>
+          <pointLight position={[0.6, 3.05, 0]} intensity={0.6} distance={7} color="#ffcf6a" />
+        </group>
+      ))}
+
+      {/* Parked cars */}
+      {cars.map((c, i) => (
+        <group key={`car-${i}`} position={c.pos} rotation={[0, c.rot, 0]}>
+          <mesh castShadow position={[0, 0.35, 0]}>
+            <boxGeometry args={[1.8, 0.5, 0.9]} />
+            <meshStandardMaterial color={c.color} metalness={0.55} roughness={0.35} />
+          </mesh>
+          <mesh castShadow position={[0.05, 0.75, 0]}>
+            <boxGeometry args={[1.0, 0.4, 0.85]} />
+            <meshStandardMaterial color={c.color} metalness={0.55} roughness={0.35} />
+          </mesh>
+          {/* Windows */}
+          <mesh position={[0.05, 0.76, 0.431]}>
+            <planeGeometry args={[0.9, 0.32]} />
+            <meshStandardMaterial color="#0b1220" metalness={0.9} roughness={0.15} />
+          </mesh>
+          {/* Wheels */}
+          {[[-0.6, 0.18, 0.42], [0.6, 0.18, 0.42], [-0.6, 0.18, -0.42], [0.6, 0.18, -0.42]].map((w, j) => (
+            <mesh key={j} position={w as [number, number, number]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.18, 0.18, 0.15, 16]} />
+              <meshStandardMaterial color="#111" roughness={0.9} />
+            </mesh>
+          ))}
+          {/* Headlights */}
+          <mesh position={[0.92, 0.35, 0.25]}>
+            <sphereGeometry args={[0.06, 8, 8]} />
+            <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.2} />
+          </mesh>
+          <mesh position={[0.92, 0.35, -0.25]}>
+            <sphereGeometry args={[0.06, 8, 8]} />
+            <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.2} />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }
@@ -109,15 +436,20 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
 
   return (
     <group position={pos}>
-      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.12, 0]}>
         <ringGeometry args={[0.35, 0.45, 32]} />
         <meshBasicMaterial color="#C9A84C" transparent opacity={0.5} side={THREE.DoubleSide} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.11, 0]}>
         <circleGeometry args={[0.15, 16]} />
         <meshBasicMaterial color="#C9A84C" transparent opacity={0.7} />
       </mesh>
-      <Html distanceFactor={15} position={[0, 0.5, 0]} center>
+      {/* Vertical marker post so the beacon is visible above props */}
+      <mesh position={[0, 1.3, 0]}>
+        <cylinderGeometry args={[0.02, 0.02, 2.4, 8]} />
+        <meshBasicMaterial color="#C9A84C" transparent opacity={0.5} />
+      </mesh>
+      <Html distanceFactor={15} position={[0, 2.6, 0]} center>
         <div className="rounded-[2px] bg-gold/10 px-2 py-0.5 text-[9px] font-semibold text-gold backdrop-blur-sm whitespace-nowrap border border-gold/20">
           {entity.label}
         </div>
@@ -181,52 +513,37 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
     <Canvas
       shadows
       dpr={[1.25, 2]}
-      camera={{ position: [12, 10, 12], fov: 45, near: 0.1, far: 200 }}
-      style={{ background: "linear-gradient(180deg, #0a1220 0%, #050810 100%)", width: "100%", height: "100%" }}
+      camera={{ position: [14, 9, 16], fov: 45, near: 0.1, far: 400 }}
+      style={{ width: "100%", height: "100%" }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
     >
-      <ambientLight intensity={0.35} />
-      <hemisphereLight args={["#88a8ff", "#402010", 0.4]} />
+      <color attach="background" args={["#8fbfe0"]} />
+      <Sky sunPosition={[80, 40, 30]} turbidity={6} rayleigh={2} mieCoefficient={0.005} mieDirectionalG={0.8} />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight args={["#cfe6ff", "#4a3d2a", 0.55]} />
       <directionalLight
         castShadow
-        position={[14, 20, 12]}
-        intensity={1.1}
-        color="#ffe4c0"
+        position={[30, 40, 20]}
+        intensity={1.4}
+        color="#fff1d4"
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-camera-far={60}
-        shadow-camera-left={-25}
-        shadow-camera-right={25}
-        shadow-camera-top={25}
-        shadow-camera-bottom={-25}
+        shadow-camera-far={120}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-camera-bottom={-40}
       />
-      <pointLight position={[0, 6, 0]} intensity={0.5} color="#C9A84C" />
-      <Environment preset="city" />
+      <Environment preset="sunset" />
+      <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
+      <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
-      {/* Ground plane */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color="#0f1622" roughness={0.9} metalness={0.05} />
-      </mesh>
+      <CityEnvironment />
 
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.55} scale={40} blur={2.5} far={10} />
-
-      <Grid
-        args={[40, 40]}
-        cellSize={1}
-        cellThickness={0.5}
-        cellColor="#3a2f18"
-        sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#C9A84C"
-        fadeDistance={30}
-        fadeStrength={1.5}
-        infiniteGrid
-        position={[0, 0.02, 0]}
-      />
+      <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 
       {actorEntities.map((e) => (
-        <EntityFigure key={e.id} entity={e} events={events} />
+        <HumanFigure key={e.id} entity={e} events={events} />
       ))}
 
       {locationEntities.map((l) => (
@@ -243,11 +560,11 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
         enableDamping
         dampingFactor={0.1}
         minDistance={5}
-        maxDistance={40}
+        maxDistance={80}
         maxPolarAngle={Math.PI / 2.2}
       />
 
-      <fog attach="fog" args={["#050810", 20, 50]} />
+      <fog attach="fog" args={["#b8d2e6", 55, 140]} />
     </Canvas>
   );
 }
