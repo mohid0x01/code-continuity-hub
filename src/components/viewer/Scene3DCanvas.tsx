@@ -1,6 +1,6 @@
 import { useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, Environment, ContactShadows, Sky, Cloud, Instances, Instance } from "@react-three/drei";
+import { OrbitControls, Html, Environment, ContactShadows, Sky, Cloud } from "@react-three/drei";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
@@ -197,7 +197,12 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
 function CityEnvironment() {
   const rng = useMemo(() => mulberry32(1337), []);
   const buildings = useMemo(() => {
-    const items: { pos: [number, number, number]; size: [number, number, number]; color: string; windows: number }[] = [];
+    const items: {
+      pos: [number, number, number];
+      size: [number, number, number];
+      color: string;
+      windows: { rows: number; cols: number; lit: boolean[] };
+    }[] = [];
     const palette = ["#8a99ab", "#c8b28d", "#a8836a", "#6b7f96", "#b8a17e", "#7a8a9a"];
     // Two rows of buildings flanking the main road (Z axis)
     for (let side = -1; side <= 1; side += 2) {
@@ -207,11 +212,15 @@ function CityEnvironment() {
         const h = 4 + rng() * 8;
         const z = i * 5 + (rng() - 0.5) * 0.5;
         const x = side * (8 + rng() * 1.5);
+        const rows = Math.max(2, Math.floor(h / 1.1));
+        const cols = Math.max(2, Math.floor(w / 0.8));
+        const lit: boolean[] = [];
+        for (let k = 0; k < rows * cols; k++) lit.push(rng() > 0.45);
         items.push({
           pos: [x, h / 2, z],
           size: [w, h, d],
           color: palette[Math.floor(rng() * palette.length)],
-          windows: Math.floor(h / 1.1),
+          windows: { rows, cols, lit },
         });
       }
     }
@@ -310,11 +319,11 @@ function CityEnvironment() {
             <meshStandardMaterial color={b.color} roughness={0.75} />
           </mesh>
           {/* Windows — front facade */}
-          {Array.from({ length: b.windows }).map((_, row) =>
-            Array.from({ length: Math.max(2, Math.floor(b.size[0] / 0.8)) }).map((_, col, arr) => {
-              const wx = -b.size[0] / 2 + 0.4 + col * (b.size[0] - 0.8) / Math.max(1, arr.length - 1);
+          {Array.from({ length: b.windows.rows }).map((_, row) =>
+            Array.from({ length: b.windows.cols }).map((_, col) => {
+              const wx = -b.size[0] / 2 + 0.4 + col * ((b.size[0] - 0.8) / Math.max(1, b.windows.cols - 1));
               const wy = -b.size[1] / 2 + 0.9 + row * 1.1;
-              const lit = Math.random() > 0.4;
+              const lit = b.windows.lit[row * b.windows.cols + col];
               return (
                 <mesh key={`w-${row}-${col}`} position={[wx, wy, b.size[2] / 2 + 0.01]}>
                   <planeGeometry args={[0.35, 0.55]} />
@@ -364,8 +373,8 @@ function CityEnvironment() {
             <cylinderGeometry args={[0.04, 0.05, 3.2, 8]} />
             <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
           </mesh>
-          <mesh castShadow position={[0.3, 3.15, 0]}>
-            <cylinderGeometry args={[0.02, 0.02, 0.6, 8]} rotation-z={Math.PI / 2 as unknown as number} />
+          <mesh castShadow position={[0.3, 3.15, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.6, 8]} />
             <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
           </mesh>
           <mesh position={[0.6, 3.05, 0]}>
