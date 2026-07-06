@@ -35,22 +35,50 @@ SSR + `/api/v1/*` routes to it. No `wrangler.toml`, `_worker.js`, or `_redirects
 
 ### Step 3 — Environment Variables
 
-In **Pages → Settings → Environment variables** add these for **both** Production and Preview:
+In **Pages → Settings → Environment variables** add these for **both** Production and Preview.
 
-| Name | Value | Notes |
+**Important — about `SUPABASE_SERVICE_ROLE_KEY` and `LOVABLE_API_KEY`:**
+On the managed Lovable Cloud backend these two secrets are **not exposed** to
+users — there is no dashboard page to copy them from. That is by design:
+they let a caller bypass RLS or spend AI credits without a session, so
+Lovable keeps them inside the managed runtime.
+
+Two options:
+
+1. **Publish on Lovable first (recommended)** — click **Publish** in the editor.
+    The app goes live at `https://<project>.lovable.app` with both secrets
+    already injected on the server side. All server functions, `/api/v1/*`,
+    AI pipeline, admin operations work with no manual key handling. You can
+    then point `scene-iq.teamcyberops.xyz` at Lovable via **Project Settings →
+    Domains → Connect Domain** (DNS: `A 185.158.133.1`).
+2. **Host on Cloudflare Pages without those keys** — the app still works
+    for anything that goes through the authenticated user session (sign in,
+    submit FIR, view own cases, RLS-scoped reads). What breaks: any server
+    function that dynamically imports `client.server` (`supabaseAdmin`) and
+    any AI Gateway call. Currently that means the AI pipeline stages will
+    fail on Cloudflare. Bring your own OpenAI/Anthropic key via
+    **Dashboard → Settings → API Keys (BYOK)** to keep AI working; admin-only
+    routes remain unavailable.
+
+Variables to set on Cloudflare Pages:
+
+| Name | Value | Required? |
 |---|---|---|
-| `SUPABASE_URL` | (from `.env`) | Server — used by `/api/v1/*` proxy |
-| `SUPABASE_PUBLISHABLE_KEY` | (from `.env`) | Server |
-| `SUPABASE_SERVICE_ROLE_KEY` | (Lovable Cloud → Advanced) | Server — admin ops only |
-| `LOVABLE_API_KEY` | (Lovable Cloud → Secrets) | Server — AI Gateway |
-| `VITE_SUPABASE_URL` | same as `SUPABASE_URL` | Client build-time |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | same as publishable key | Client build-time |
-| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` | (from `.env`) | Client build-time |
-| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID` | (from `.env`) | Client build-time |
+| `SUPABASE_URL` | `https://yayosibohzruoplhownd.supabase.co` (from `.env`) | ✅ yes |
+| `SUPABASE_PUBLISHABLE_KEY` | value from `.env` | ✅ yes |
+| `VITE_SUPABASE_URL` | same as `SUPABASE_URL` | ✅ yes (build-time) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | same as publishable key | ✅ yes (build-time) |
+| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` | value from `.env` | ✅ yes (maps) |
+| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID` | value from `.env` | optional |
+| `SUPABASE_SERVICE_ROLE_KEY` | **not available on Lovable Cloud** — leave unset | ❌ skip |
+| `LOVABLE_API_KEY` | **not available on Lovable Cloud** — leave unset | ❌ skip |
 
 > Setting `VITE_SUPABASE_URL` to the actual Supabase URL is fine — the browser only ever
 > talks to `/api/v1/*` on your own domain because that's what the app calls. The URL is used
 > server-side by the proxy handler.
+>
+> **If you want the full AI pipeline on Cloudflare**, publish on Lovable first (option 1
+> above). There is no supported way to extract `LOVABLE_API_KEY` from Lovable Cloud.
 
 ### Step 4 — Custom Domain (`scene-iq.teamcyberops.xyz`)
 

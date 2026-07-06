@@ -234,10 +234,12 @@ function SceneViewer() {
     const durationSec = Math.min(30, Math.max(6, events.length * 2 + 2));
 
     // Wait for the canvas to mount, then start recording.
-    await new Promise((r) => setTimeout(r, 400));
+    // Longer wait ensures RecorderBridge (mounted inside <Canvas>) is live
+    // after switching to the "scene" tab — otherwise record-start fires with
+    // no listener and the promise below times out, leaving video_status="queued".
+    await new Promise((r) => setTimeout(r, 900));
 
     try {
-      await queueVideoFn({ data: { jobId } });
       toast.info(`Recording ${durationSec}s scene playthrough…`);
 
       const blob: Blob = await new Promise((resolve, reject) => {
@@ -420,7 +422,7 @@ function SceneViewer() {
                     Generate a 10-second photoreal 3D reconstruction of this incident driven by the scene manifest, real Pakistan location, and FIR narrative.
                   </p>
                   <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
-                  <button onClick={handleGenerateVideo} disabled={videoStatus === "queued" || videoStatus === "processing"}
+                  <button onClick={handleGenerateVideo} disabled={recording}
                     className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
                     <Sparkles className="h-4 w-4" /> {recording ? "Recording…" : "Generate 3D Video"}
                   </button>
