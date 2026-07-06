@@ -271,8 +271,6 @@ function SceneViewer() {
       toast.success("3D incident video generated");
       setTab("video");
     } catch (e) {
-      // Reset any stale queued state so the button becomes clickable again.
-      try { await queueVideoFn({ data: { jobId } }); } catch { /* noop */ }
       toast.error(e instanceof Error ? e.message : "Failed to queue video");
     } finally {
       setRecording(false);
