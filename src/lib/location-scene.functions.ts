@@ -15,6 +15,7 @@ export interface RealWorldScene {
   trees: Array<[number, number]>;
   staticMapUrl: string | null;
   radiusMeters: number;
+  status?: "ok" | "empty" | "unavailable";
 }
 
 const inputSchema = z.object({
