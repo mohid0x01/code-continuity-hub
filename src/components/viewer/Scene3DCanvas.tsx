@@ -460,6 +460,129 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
   );
 }
 
+/**
+ * Real-world environment rebuilt from OpenStreetMap footprints around the
+ * FIR anchor. Buildings are extruded polygons, roads are ribbon meshes,
+ * trees are billboarded low-poly clusters. Falls back to nothing if arrays
+ * are empty (caller then keeps procedural CityEnvironment).
+ */
+function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
+  const buildings = useMemo(() => {
+    return scene.buildings.map((b, i) => {
+      const shape = new THREE.Shape();
+      b.footprint.forEach(([x, z], idx) => {
+        if (idx === 0) shape.moveTo(x, z);
+        else shape.lineTo(x, z);
+      });
+      const geom = new THREE.ExtrudeGeometry(shape, {
+        depth: b.height,
+        bevelEnabled: false,
+        curveSegments: 1,
+      });
+      // Extrude is on +Z of shape plane → rotate so height points up (+Y)
+      geom.rotateX(-Math.PI / 2);
+      // Colour by height so the skyline reads well
+      const t = Math.min(1, b.height / 30);
+      const color = new THREE.Color().lerpColors(
+        new THREE.Color("#c8b28d"),
+        new THREE.Color("#6b7f96"),
+        t,
+      );
+      return { i, geom, color, height: b.height };
+    });
+  }, [scene.buildings]);
+
+  // Cleanup extrude geometries on unmount
+  useEffect(() => {
+    return () => {
+      buildings.forEach((b) => b.geom.dispose());
+    };
+  }, [buildings]);
+
+  const roadSegments = useMemo(() => {
+    // Sort so wider (bigger) roads render first (below narrower footpaths)
+    const sorted = [...scene.roads].sort((a, b) => b.width - a.width);
+    const segments: {
+      x: number;
+      z: number;
+      length: number;
+      angle: number;
+      width: number;
+      color: string;
+    }[] = [];
+    for (const r of sorted) {
+      const color = r.width >= 6 ? "#20242b" : r.width >= 3 ? "#2a2f37" : "#8a8578";
+      for (let i = 0; i < r.path.length - 1; i++) {
+        const [x1, z1] = r.path[i];
+        const [x2, z2] = r.path[i + 1];
+        const dx = x2 - x1;
+        const dz = z2 - z1;
+        const length = Math.hypot(dx, dz);
+        if (length < 0.5) continue;
+        segments.push({
+          x: (x1 + x2) / 2,
+          z: (z1 + z2) / 2,
+          length,
+          angle: Math.atan2(dz, dx),
+          width: r.width,
+          color,
+        });
+      }
+    }
+    return segments;
+  }, [scene.roads]);
+
+  return (
+    <group>
+      {/* Grass ground */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <planeGeometry args={[scene.radiusMeters * 4, scene.radiusMeters * 4]} />
+        <meshStandardMaterial color="#3d5a34" roughness={1} />
+      </mesh>
+
+      {/* Roads */}
+      {roadSegments.map((s, i) => (
+        <mesh
+          key={`rd-${i}`}
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, -s.angle]}
+          position={[s.x, 0.01, s.z]}
+        >
+          <planeGeometry args={[s.length, s.width]} />
+          <meshStandardMaterial color={s.color} roughness={0.95} />
+        </mesh>
+      ))}
+
+      {/* Extruded building footprints */}
+      {buildings.map((b) => (
+        <mesh key={`bl-${b.i}`} castShadow receiveShadow geometry={b.geom}>
+          <meshStandardMaterial color={b.color} roughness={0.78} />
+        </mesh>
+      ))}
+
+      {/* Trees from OSM nodes */}
+      {scene.trees.map(([x, z], i) => (
+        <group key={`t-${i}`} position={[x, 0, z]}>
+          <mesh castShadow position={[0, 0.7, 0]}>
+            <cylinderGeometry args={[0.09, 0.14, 1.4, 8]} />
+            <meshStandardMaterial color="#5b3a20" roughness={0.95} />
+          </mesh>
+          <mesh castShadow position={[0, 1.9, 0]}>
+            <icosahedronGeometry args={[0.85, 1]} />
+            <meshStandardMaterial color="#2f6a3a" roughness={0.85} flatShading />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Incident anchor marker */}
+      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.4, 1.7, 40]} />
+        <meshBasicMaterial color="#C9A84C" transparent opacity={0.75} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
 function MovementTrails({ entities, events }: { entities: SceneEntity[]; events: SceneEvent[] }) {
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const actorEntities = entities.filter(e => e.entity_type === "actor");
@@ -507,9 +630,10 @@ function ZoomBridge() {
   return null;
 }
 
-export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
+export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProps) {
   const actorEntities = entities.filter(e => e.entity_type === "actor" || e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
+  const useReal = !!(realWorld && (realWorld.buildings.length > 0 || realWorld.roads.length > 0));
 
   return (
     <Canvas
@@ -540,7 +664,7 @@ export function Scene3DCanvas({ entities, events }: Scene3DCanvasProps) {
       <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
       <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
-      <CityEnvironment />
+      {useReal ? <RealWorldEnvironment scene={realWorld!} /> : <CityEnvironment />}
 
       <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 
