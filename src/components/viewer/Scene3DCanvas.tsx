@@ -4,6 +4,7 @@ import { OrbitControls, Html, Environment, ContactShadows, Sky, Cloud } from "@r
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
+import type { RealWorldScene } from "@/lib/location-scene.functions";
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
@@ -11,6 +12,7 @@ type SceneEvent = Tables<"scene_events">;
 interface Scene3DCanvasProps {
   entities: SceneEntity[];
   events: SceneEvent[];
+  realWorld?: RealWorldScene | null;
 }
 
 // Deterministic PRNG so procedural props stay stable between frames/renders.
