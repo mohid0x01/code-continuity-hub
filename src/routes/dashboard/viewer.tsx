@@ -224,7 +224,7 @@ function SceneViewer() {
     if (!primaryPin) return;
     let cancelled = false;
     setRealWorldLoading(true);
-    fetchSceneFn({ data: { lat: primaryPin.lat, lng: primaryPin.lng, radius: 250 } })
+    fetchSceneFn({ data: { lat: primaryPin.lat, lng: primaryPin.lng, radius: 300 } })
       .then((scene) => { if (!cancelled) setRealWorld(scene as RealWorldScene); })
       .catch(() => { /* fall back to procedural */ })
       .finally(() => { if (!cancelled) setRealWorldLoading(false); });
@@ -425,10 +425,14 @@ function SceneViewer() {
                   <span className="text-text-muted">Loading real-world map…</span>
                 ) : realWorld && (realWorld.buildings.length + realWorld.roads.length) > 0 ? (
                   <span className="text-emerald-400">
-                    Real Location · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads
+                    Real Location · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads · r={realWorld.radiusMeters}m
                   </span>
+                ) : realWorld?.status === "unavailable" ? (
+                  <span className="text-amber-400">OSM service unavailable · procedural fallback</span>
                 ) : (
-                  <span className="text-amber-400">Procedural fallback (OSM empty)</span>
+                  <span className="text-amber-400">
+                    No OSM data within {realWorld?.radiusMeters ?? 4000}m · procedural fallback
+                  </span>
                 )}
               </div>
 
