@@ -35,6 +35,8 @@ import { queueVideoGeneration, uploadRenderedVideo } from "@/lib/video.functions
 import { logAuditEvent } from "@/lib/audit.functions";
 import { exportCourtReportPDF } from "@/lib/pdf-export";
 import { EvidenceManager } from "@/components/EvidenceManager";
+import { fetchLocationScene } from "@/lib/location-scene.functions";
+import type { RealWorldScene } from "@/lib/location-scene.functions";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -68,7 +70,10 @@ function SceneViewer() {
   const queueVideoFn = useServerFn(queueVideoGeneration);
   const uploadVideoFn = useServerFn(uploadRenderedVideo);
   const logFn = useServerFn(logAuditEvent);
+  const fetchSceneFn = useServerFn(fetchLocationScene);
   const [recording, setRecording] = useState(false);
+  const [realWorld, setRealWorld] = useState<RealWorldScene | null>(null);
+  const [realWorldLoading, setRealWorldLoading] = useState(false);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
@@ -213,6 +218,18 @@ function SceneViewer() {
     const label = [area, city].filter(Boolean).join(", ") || "Incident Location";
     return { label, lat, lng, description: (firRec?.formatted_address as string | null | undefined) ?? undefined };
   })();
+
+  // Fetch real-world OSM geometry once the FIR lat/lng is known.
+  useEffect(() => {
+    if (!primaryPin) return;
+    let cancelled = false;
+    setRealWorldLoading(true);
+    fetchSceneFn({ data: { lat: primaryPin.lat, lng: primaryPin.lng, radius: 250 } })
+      .then((scene) => { if (!cancelled) setRealWorld(scene as RealWorldScene); })
+      .catch(() => { /* fall back to procedural */ })
+      .finally(() => { if (!cancelled) setRealWorldLoading(false); });
+    return () => { cancelled = true; };
+  }, [primaryPin?.lat, primaryPin?.lng, fetchSceneFn]);
 
   const mapLocations = () => geocodeFirText(
     firText,
@@ -399,8 +416,28 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={entities} events={events} />
+                <Scene3DCanvas entities={entities} events={events} realWorld={realWorld} />
               </Suspense>
+
+              {/* Real-world overlay badge */}
+              <div className="absolute left-4 top-14 rounded-[4px] border border-emerald-500/30 bg-background/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] backdrop-blur">
+                {realWorldLoading ? (
+                  <span className="text-text-muted">Loading real-world map…</span>
+                ) : realWorld && (realWorld.buildings.length + realWorld.roads.length) > 0 ? (
+                  <span className="text-emerald-400">
+                    Real Location · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads
+                  </span>
+                ) : (
+                  <span className="text-amber-400">Procedural fallback (OSM empty)</span>
+                )}
+              </div>
+
+              {realWorld?.staticMapUrl && (
+                <div className="absolute right-4 top-14 w-52 overflow-hidden rounded-[6px] border border-gold/30 bg-background/70 backdrop-blur">
+                  <img src={realWorld.staticMapUrl} alt="Location satellite preview" className="block w-full" />
+                  <div className="px-2 py-1 text-[9px] uppercase tracking-[0.1em] text-gold">Satellite Preview</div>
+                </div>
+              )}
 
               {events.length > 0 && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-[4px] border border-gold/20 bg-background/80 px-6 py-3 backdrop-blur-md">
