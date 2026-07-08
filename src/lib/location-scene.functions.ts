@@ -20,10 +20,31 @@ export interface RealWorldScene {
 const inputSchema = z.object({
   lat: z.number(),
   lng: z.number(),
-  radius: z.number().min(80).max(600).optional(),
+  radius: z.number().min(80).max(4000).optional(),
 });
 
-const OVERPASS = "https://overpass-api.de/api/interpreter";
+const OVERPASS_MIRRORS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.openstreetmap.ru/api/interpreter",
+];
+
+async function overpassQuery(body: string): Promise<any | null> {
+  for (const url of OVERPASS_MIRRORS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "data=" + encodeURIComponent(body),
+      });
+      if (res.ok) return await res.json();
+      console.warn(`Overpass mirror ${url} returned ${res.status}`);
+    } catch (err) {
+      console.warn(`Overpass mirror ${url} failed`, err);
+    }
+  }
+  return null;
+}
 
 function project(lat: number, lng: number, anchorLat: number, anchorLng: number): [number, number] {
   const R = 6378137;
@@ -89,58 +110,65 @@ export const fetchLocationScene = createServerFn({ method: "POST" })
   .inputValidator((data) => inputSchema.parse(data))
   .handler(async ({ data }) => {
     const { lat, lng } = data;
-    const radius = data.radius ?? 250;
-
-    const query = `
-      [out:json][timeout:25];
-      (
-        way["building"](around:${radius},${lat},${lng});
-        way["highway"](around:${radius},${lat},${lng});
-        node["natural"="tree"](around:${radius},${lat},${lng});
-      );
-      out geom tags;
-    `;
+    const startRadius = data.radius ?? 300;
+    // Auto-expand radius until we find OSM data (helps rural / sparse areas).
+    const radiusLadder = Array.from(
+      new Set([startRadius, 500, 1000, 2000, 4000].filter((r) => r >= startRadius)),
+    );
 
     const buildings: RealWorldScene["buildings"] = [];
     const roads: RealWorldScene["roads"] = [];
     const trees: RealWorldScene["trees"] = [];
+    let usedRadius = startRadius;
+    let status: "ok" | "empty" | "unavailable" = "unavailable";
 
-    try {
-      const res = await fetch(OVERPASS, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "data=" + encodeURIComponent(query),
-      });
-      if (res.ok) {
-        const json = (await res.json()) as {
-          elements?: Array<{
-            type: string;
-            tags?: Record<string, string>;
-            geometry?: Array<{ lat: number; lon: number }>;
-            lat?: number;
-            lon?: number;
-          }>;
-        };
-        for (const el of json.elements ?? []) {
-          if (el.type === "way" && el.geometry && el.geometry.length >= 2) {
-            const pts: Array<[number, number]> = el.geometry.map((p) =>
-              project(p.lat, p.lon, lat, lng),
-            );
-            if (el.tags?.["building"]) {
-              buildings.push({ footprint: pts, height: inferBuildingHeight(el.tags) });
-            } else if (el.tags?.["highway"]) {
-              roads.push({ path: pts, width: roadWidth(el.tags["highway"]), kind: el.tags["highway"] });
-            }
-          } else if (el.type === "node" && typeof el.lat === "number" && typeof el.lon === "number") {
-            if (el.tags?.["natural"] === "tree") {
-              trees.push(project(el.lat, el.lon, lat, lng));
-            }
+    for (const radius of radiusLadder) {
+      const query = `
+        [out:json][timeout:25];
+        (
+          way["building"](around:${radius},${lat},${lng});
+          way["highway"](around:${radius},${lat},${lng});
+          node["natural"="tree"](around:${radius},${lat},${lng});
+        );
+        out geom tags;
+      `;
+      const json = await overpassQuery(query);
+      if (!json) {
+        status = "unavailable";
+        continue;
+      }
+      status = "empty";
+      buildings.length = 0;
+      roads.length = 0;
+      trees.length = 0;
+      const elements = (json.elements ?? []) as Array<{
+        type: string;
+        tags?: Record<string, string>;
+        geometry?: Array<{ lat: number; lon: number }>;
+        lat?: number;
+        lon?: number;
+      }>;
+      for (const el of elements) {
+        if (el.type === "way" && el.geometry && el.geometry.length >= 2) {
+          const pts: Array<[number, number]> = el.geometry.map((p) =>
+            project(p.lat, p.lon, lat, lng),
+          );
+          if (el.tags?.["building"]) {
+            buildings.push({ footprint: pts, height: inferBuildingHeight(el.tags) });
+          } else if (el.tags?.["highway"]) {
+            roads.push({ path: pts, width: roadWidth(el.tags["highway"]), kind: el.tags["highway"] });
+          }
+        } else if (el.type === "node" && typeof el.lat === "number" && typeof el.lon === "number") {
+          if (el.tags?.["natural"] === "tree") {
+            trees.push(project(el.lat, el.lon, lat, lng));
           }
         }
       }
-    } catch (err) {
-      // Overpass may rate-limit — leave arrays empty; scene will fall back to procedural.
-      console.error("Overpass fetch failed", err);
+      usedRadius = radius;
+      if (buildings.length + roads.length > 0) {
+        status = "ok";
+        break;
+      }
     }
 
     // Google Static Map preview via connector gateway (server-side; keeps key private).
@@ -175,7 +203,8 @@ export const fetchLocationScene = createServerFn({ method: "POST" })
       roads,
       trees,
       staticMapUrl,
-      radiusMeters: radius,
+      radiusMeters: usedRadius,
+      status,
     };
     return scene;
   });
