@@ -268,6 +268,65 @@ function normalizeScene(raw: unknown): NormalizedScene {
   return parsed;
 }
 
+function ensureStatementCriticalEntities(scene: NormalizedScene, narrative: string): NormalizedScene {
+  const text = narrative.toLowerCase();
+  const mentionsCar = /\b(car|vehicle|motorcar|sedan|suv|mehran|corolla|cultus|alto|honda|toyota|civic)\b|گاڑی|کار/i.test(narrative);
+  if (mentionsCar && !scene.entities.some((e) => e.entity_type === "vehicle")) {
+    scene.entities.push({
+      entity_type: "vehicle",
+      entity_role: "none",
+      label: "Car mentioned in FIR",
+      description: "Vehicle explicitly inferred from the FIR statement.",
+      confidence: 0.78,
+      position_x: 4,
+      position_y: 0,
+      position_z: -3,
+      source_text: "FIR statement mentions car/vehicle.",
+    });
+  }
+
+  const vehicle = scene.entities.find((e) => e.entity_type === "vehicle");
+  if (vehicle && !scene.events.some((e) => e.entity_label === vehicle.label)) {
+    const parked = /park|parked|standing|کھڑی|کھڑا|روکی|رکی/i.test(narrative);
+    scene.events.push({
+      sequence_number: scene.events.length + 1,
+      entity_label: vehicle.label,
+      action_label: parked ? "parked at scene" : "arrives/moves through scene",
+      description: parked
+        ? `${vehicle.label} is shown parked at the incident location as referenced in the statement.`
+        : `${vehicle.label} is shown moving through the incident location according to the statement timeline.`,
+      origin_x: vehicle.position_x - (parked ? 0 : 8),
+      origin_y: 0,
+      origin_z: vehicle.position_z - (parked ? 0 : 5),
+      dest_x: vehicle.position_x,
+      dest_y: 0,
+      dest_z: vehicle.position_z,
+      duration_seconds: parked ? 2 : 4,
+      source_text: vehicle.source_text,
+    });
+  }
+
+  const incidentLocation = scene.entities.find((e) => e.entity_type === "location");
+  if (!incidentLocation) {
+    scene.entities.push({
+      entity_type: "location",
+      entity_role: "none",
+      label: "Selected incident location",
+      description: "Primary location coordinates submitted with the FIR.",
+      confidence: 1,
+      position_x: 0,
+      position_y: 0,
+      position_z: 0,
+      source_text: "Officer-selected map location.",
+    });
+  }
+
+  scene.events = scene.events
+    .sort((a, b) => a.sequence_number - b.sequence_number)
+    .map((event, index) => ({ ...event, sequence_number: index + 1 }));
+  return scene;
+}
+
 async function callLLMWithModel(model: string, narrative: string, incidentType: string) {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
@@ -287,6 +346,12 @@ For each event:
 - entity_label MUST exactly match an entity label above
 - origin / dest coordinates show movement (same coords if stationary)
 - duration_seconds 1-5
+
+Critical reconstruction rules:
+- If the FIR mentions any car, vehicle, motorcycle, bike, rickshaw, truck, bus, or Urdu/Roman Urdu equivalent, you MUST create a vehicle entity.
+- Vehicle events must describe whether it arrived, parked, hit, escaped, transported someone, or remained stationary.
+- Do not omit important physical props (weapons, phones, cash, houses, roads, shops) if they explain what happened.
+- The 3D scene will be placed on the officer-selected real map coordinates, so your grid positions should describe relative movement around that exact incident pin.
 
 Return ONLY valid JSON matching the schema. No prose, no markdown.`;
 
@@ -369,7 +434,7 @@ Return ONLY valid JSON matching the schema. No prose, no markdown.`;
   // Schema-validate & normalize. Throw a retryable error if the LLM produced
   // garbage so the fallback chain can try the next model.
   try {
-    return normalizeScene(parsed);
+      return ensureStatementCriticalEntities(normalizeScene(parsed), narrative);
   } catch (e) {
     const err = new Error(
       `AI output failed schema validation: ${e instanceof Error ? e.message : String(e)}`,
