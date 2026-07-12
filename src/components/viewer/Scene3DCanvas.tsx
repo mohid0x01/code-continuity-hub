@@ -15,16 +15,6 @@ interface Scene3DCanvasProps {
   realWorld?: RealWorldScene | null;
 }
 
-// Deterministic PRNG so procedural props stay stable between frames/renders.
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
  * Fully-articulated humanoid rig built from primitives — head, neck, torso,
  * hips, upper/lower arms with hands, and upper/lower legs with feet. Limbs
@@ -191,236 +181,74 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
   );
 }
 
-/**
- * Procedural city block — asphalt roads with lane markings, sidewalks with
- * curbs, varied buildings with lit windows, trees, streetlights, benches,
- * and parked cars. Seeded so the layout is stable frame-to-frame.
- */
-function CityEnvironment() {
-  const rng = useMemo(() => mulberry32(1337), []);
-  const buildings = useMemo(() => {
-    const items: {
-      pos: [number, number, number];
-      size: [number, number, number];
-      color: string;
-      windows: { rows: number; cols: number; lit: boolean[] };
-    }[] = [];
-    const palette = ["#8a99ab", "#c8b28d", "#a8836a", "#6b7f96", "#b8a17e", "#7a8a9a"];
-    // Two rows of buildings flanking the main road (Z axis)
-    for (let side = -1; side <= 1; side += 2) {
-      for (let i = -3; i <= 3; i++) {
-        const w = 3 + rng() * 1.5;
-        const d = 3 + rng() * 1.5;
-        const h = 4 + rng() * 8;
-        const z = i * 5 + (rng() - 0.5) * 0.5;
-        const x = side * (8 + rng() * 1.5);
-        const rows = Math.max(2, Math.floor(h / 1.1));
-        const cols = Math.max(2, Math.floor(w / 0.8));
-        const lit: boolean[] = [];
-        for (let k = 0; k < rows * cols; k++) lit.push(rng() > 0.45);
-        items.push({
-          pos: [x, h / 2, z],
-          size: [w, h, d],
-          color: palette[Math.floor(rng() * palette.length)],
-          windows: { rows, cols, lit },
-        });
-      }
-    }
-    return items;
-  }, [rng]);
+function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
+  const rootRef = useRef<THREE.Group>(null);
+  const currentEvent = useSceneStore((s) => s.currentEvent);
 
-  const trees = useMemo(() => {
-    const items: { pos: [number, number, number]; scale: number }[] = [];
-    for (let i = 0; i < 26; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const x = side * (4.2 + rng() * 0.6);
-      const z = -18 + i * 1.5 + (rng() - 0.5) * 0.4;
-      items.push({ pos: [x, 0, z], scale: 0.85 + rng() * 0.5 });
+  const positions = useMemo(() => {
+    if (events.length === 0) return [[entity.position_x || 0, 0, entity.position_z || 0]];
+    let pos = [entity.position_x || 0, 0, entity.position_z || 0];
+    const result: number[][] = [];
+    for (let i = 0; i < events.length; i++) {
+      const evt = events.find((e) => e.sequence_number === i + 1 && e.entity_id === entity.id);
+      if (evt) pos = [evt.dest_x || pos[0], 0, evt.dest_z || pos[2]];
+      result.push([...pos]);
     }
-    return items;
-  }, [rng]);
+    return result;
+  }, [entity, events]);
 
-  const streetlights = useMemo(() => {
-    const items: [number, number, number][] = [];
-    for (let i = -4; i <= 4; i++) {
-      items.push([-4.5, 0, i * 4]);
-      items.push([4.5, 0, i * 4]);
-    }
-    return items;
-  }, []);
+  const targetPos = useMemo(() => {
+    const p = positions[Math.min(currentEvent, positions.length - 1)];
+    return new THREE.Vector3(p[0], 0, p[2]);
+  }, [currentEvent, positions]);
 
-  const cars = useMemo(() => {
-    const items: { pos: [number, number, number]; rot: number; color: string }[] = [];
-    const colors = ["#c53030", "#1f2937", "#f5f5f4", "#0ea5e9", "#facc15"];
-    for (let i = 0; i < 5; i++) {
-      items.push({
-        pos: [(i % 2 === 0 ? -1 : 1) * (5.8 + rng() * 0.2), 0, -12 + i * 5 + rng()],
-        rot: i % 2 === 0 ? Math.PI / 2 : -Math.PI / 2,
-        color: colors[Math.floor(rng() * colors.length)],
-      });
-    }
-    return items;
-  }, [rng]);
+  useFrame(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const prev = root.position.clone();
+    root.position.lerp(targetPos, 0.055);
+    const dir = new THREE.Vector3().subVectors(root.position, prev);
+    if (dir.lengthSq() > 0.00005) root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, Math.atan2(dir.x, dir.z), 0.12);
+  });
 
+  const color = entity.color || "#C9A84C";
   return (
-    <group>
-      {/* Ground (grass fields far out) */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#3f5b3a" roughness={1} />
+    <group ref={rootRef} position={[positions[0][0], 0, positions[0][2]]}>
+      <mesh castShadow receiveShadow position={[0, 0.36, 0]}>
+        <boxGeometry args={[2.35, 0.55, 1.12]} />
+        <meshStandardMaterial color={color} metalness={0.55} roughness={0.28} />
       </mesh>
-      {/* Main asphalt road (Z-axis) */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <planeGeometry args={[6, 200]} />
-        <meshStandardMaterial color="#1a1d22" roughness={0.95} />
+      <mesh castShadow position={[-0.12, 0.82, -0.02]}>
+        <boxGeometry args={[1.22, 0.5, 1.02]} />
+        <meshStandardMaterial color={color} metalness={0.48} roughness={0.3} />
       </mesh>
-      {/* Cross road (X-axis) */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.011, 0]}>
-        <planeGeometry args={[200, 6]} />
-        <meshStandardMaterial color="#1a1d22" roughness={0.95} />
+      <mesh position={[-0.1, 0.84, 0.502]}>
+        <planeGeometry args={[1.0, 0.32]} />
+        <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
       </mesh>
-      {/* Center dashed lane markings */}
-      {Array.from({ length: 40 }).map((_, i) => (
-        <mesh key={`ln-z-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -40 + i * 2]}>
-          <planeGeometry args={[0.12, 0.8]} />
-          <meshBasicMaterial color="#f8fafc" />
+      <mesh position={[-0.1, 0.84, -0.502]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[1.0, 0.32]} />
+        <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
+      </mesh>
+      {([[-0.78, 0.2, 0.54], [0.78, 0.2, 0.54], [-0.78, 0.2, -0.54], [0.78, 0.2, -0.54]] as [number, number, number][]).map((w, i) => (
+        <mesh key={i} position={w} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.23, 0.23, 0.18, 20]} />
+          <meshStandardMaterial color="#080808" roughness={0.86} />
         </mesh>
       ))}
-      {Array.from({ length: 40 }).map((_, i) => (
-        <mesh key={`ln-x-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-40 + i * 2, 0.021, 0]}>
-          <planeGeometry args={[0.8, 0.12]} />
-          <meshBasicMaterial color="#f8fafc" />
-        </mesh>
-      ))}
-      {/* Sidewalks */}
-      {[-1, 1].map((s) => (
-        <mesh key={`sw-z-${s}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[s * 4, 0.05, 0]}>
-          <planeGeometry args={[2, 200]} />
-          <meshStandardMaterial color="#9ca3af" roughness={0.9} />
-        </mesh>
-      ))}
-      {[-1, 1].map((s) => (
-        <mesh key={`sw-x-${s}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, s * 4]}>
-          <planeGeometry args={[200, 2]} />
-          <meshStandardMaterial color="#9ca3af" roughness={0.9} />
-        </mesh>
-      ))}
-      {/* Curbs */}
-      {[-1, 1].map((s) => (
-        <mesh key={`curb-z-${s}`} castShadow receiveShadow position={[s * 3.05, 0.075, 0]}>
-          <boxGeometry args={[0.1, 0.15, 200]} />
-          <meshStandardMaterial color="#6b7280" roughness={0.9} />
-        </mesh>
-      ))}
-
-      {/* Buildings with window rows */}
-      {buildings.map((b, i) => (
-        <group key={`bld-${i}`} position={b.pos}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={b.size} />
-            <meshStandardMaterial color={b.color} roughness={0.75} />
-          </mesh>
-          {/* Windows — front facade */}
-          {Array.from({ length: b.windows.rows }).map((_, row) =>
-            Array.from({ length: b.windows.cols }).map((_, col) => {
-              const wx = -b.size[0] / 2 + 0.4 + col * ((b.size[0] - 0.8) / Math.max(1, b.windows.cols - 1));
-              const wy = -b.size[1] / 2 + 0.9 + row * 1.1;
-              const lit = b.windows.lit[row * b.windows.cols + col];
-              return (
-                <mesh key={`w-${row}-${col}`} position={[wx, wy, b.size[2] / 2 + 0.01]}>
-                  <planeGeometry args={[0.35, 0.55]} />
-                  <meshStandardMaterial
-                    color={lit ? "#ffe27a" : "#0f172a"}
-                    emissive={lit ? "#ffb84a" : "#000000"}
-                    emissiveIntensity={lit ? 0.7 : 0}
-                  />
-                </mesh>
-              );
-            }),
-          )}
-          {/* Roof cap */}
-          <mesh castShadow position={[0, b.size[1] / 2 + 0.05, 0]}>
-            <boxGeometry args={[b.size[0] + 0.2, 0.1, b.size[2] + 0.2]} />
-            <meshStandardMaterial color="#3b3b3b" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Trees — trunk + layered foliage */}
-      {trees.map((t, i) => (
-        <group key={`tree-${i}`} position={t.pos} scale={t.scale}>
-          <mesh castShadow position={[0, 0.6, 0]}>
-            <cylinderGeometry args={[0.09, 0.13, 1.2, 8]} />
-            <meshStandardMaterial color="#5b3a20" roughness={0.95} />
-          </mesh>
-          <mesh castShadow position={[0, 1.5, 0]}>
-            <icosahedronGeometry args={[0.75, 1]} />
-            <meshStandardMaterial color="#2f6a3a" roughness={0.85} flatShading />
-          </mesh>
-          <mesh castShadow position={[0.25, 1.85, 0.15]}>
-            <icosahedronGeometry args={[0.5, 1]} />
-            <meshStandardMaterial color="#3a7f45" roughness={0.85} flatShading />
-          </mesh>
-          <mesh castShadow position={[-0.2, 1.75, -0.15]}>
-            <icosahedronGeometry args={[0.55, 1]} />
-            <meshStandardMaterial color="#276b34" roughness={0.85} flatShading />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Streetlights */}
-      {streetlights.map((p, i) => (
-        <group key={`sl-${i}`} position={p}>
-          <mesh castShadow position={[0, 1.6, 0]}>
-            <cylinderGeometry args={[0.04, 0.05, 3.2, 8]} />
-            <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
-          </mesh>
-          <mesh castShadow position={[0.3, 3.15, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.02, 0.02, 0.6, 8]} />
-            <meshStandardMaterial color="#0f172a" metalness={0.7} roughness={0.4} />
-          </mesh>
-          <mesh position={[0.6, 3.05, 0]}>
-            <sphereGeometry args={[0.13, 12, 12]} />
-            <meshStandardMaterial color="#fff2b3" emissive="#ffcf6a" emissiveIntensity={1.6} />
-          </mesh>
-          <pointLight position={[0.6, 3.05, 0]} intensity={0.6} distance={7} color="#ffcf6a" />
-        </group>
-      ))}
-
-      {/* Parked cars */}
-      {cars.map((c, i) => (
-        <group key={`car-${i}`} position={c.pos} rotation={[0, c.rot, 0]}>
-          <mesh castShadow position={[0, 0.35, 0]}>
-            <boxGeometry args={[1.8, 0.5, 0.9]} />
-            <meshStandardMaterial color={c.color} metalness={0.55} roughness={0.35} />
-          </mesh>
-          <mesh castShadow position={[0.05, 0.75, 0]}>
-            <boxGeometry args={[1.0, 0.4, 0.85]} />
-            <meshStandardMaterial color={c.color} metalness={0.55} roughness={0.35} />
-          </mesh>
-          {/* Windows */}
-          <mesh position={[0.05, 0.76, 0.431]}>
-            <planeGeometry args={[0.9, 0.32]} />
-            <meshStandardMaterial color="#0b1220" metalness={0.9} roughness={0.15} />
-          </mesh>
-          {/* Wheels */}
-          {[[-0.6, 0.18, 0.42], [0.6, 0.18, 0.42], [-0.6, 0.18, -0.42], [0.6, 0.18, -0.42]].map((w, j) => (
-            <mesh key={j} position={w as [number, number, number]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.18, 0.18, 0.15, 16]} />
-              <meshStandardMaterial color="#111" roughness={0.9} />
-            </mesh>
-          ))}
-          {/* Headlights */}
-          <mesh position={[0.92, 0.35, 0.25]}>
-            <sphereGeometry args={[0.06, 8, 8]} />
-            <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.2} />
-          </mesh>
-          <mesh position={[0.92, 0.35, -0.25]}>
-            <sphereGeometry args={[0.06, 8, 8]} />
-            <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.2} />
-          </mesh>
-        </group>
-      ))}
+      <mesh position={[1.2, 0.38, 0.33]}>
+        <sphereGeometry args={[0.07, 10, 10]} />
+        <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
+      </mesh>
+      <mesh position={[1.2, 0.38, -0.33]}>
+        <sphereGeometry args={[0.07, 10, 10]} />
+        <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
+      </mesh>
+      <Html distanceFactor={12} position={[0, 1.65, 0]} center>
+        <div className="rounded-full border border-gold/50 bg-background/75 px-2 py-0.5 text-[10px] font-semibold text-gold backdrop-blur-sm whitespace-nowrap">
+          {entity.label}
+        </div>
+      </Html>
     </group>
   );
 }
@@ -461,10 +289,9 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
 }
 
 /**
- * Real-world environment rebuilt from OpenStreetMap footprints around the
- * FIR anchor. Buildings are extruded polygons, roads are ribbon meshes,
- * trees are billboarded low-poly clusters. Falls back to nothing if arrays
- * are empty (caller then keeps procedural CityEnvironment).
+ * Real-world environment rebuilt from the FIR anchor. It merges OSM footprints,
+ * Google roads/places, and coordinate-anchored inferred structures when public
+ * map providers do not expose enough detail for that exact location.
  */
 function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
   const buildings = useMemo(() => {
@@ -534,10 +361,10 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
 
   return (
     <group>
-      {/* Grass ground */}
+      {/* Real-location ground canvas. Even when map providers lack footprints, this stays anchored to the FIR lat/lng. */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
         <planeGeometry args={[scene.radiusMeters * 4, scene.radiusMeters * 4]} />
-        <meshStandardMaterial color="#3d5a34" roughness={1} />
+        <meshStandardMaterial color="#496242" roughness={1} />
       </mesh>
 
       {/* Roads */}
@@ -574,9 +401,54 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         </group>
       ))}
 
+      {/* Street lights from OSM or location-anchored inference */}
+      {scene.streetLights.map(([x, z], i) => (
+        <group key={`lamp-${i}`} position={[x, 0, z]}>
+          <mesh castShadow position={[0, 1.6, 0]}>
+            <cylinderGeometry args={[0.035, 0.045, 3.2, 8]} />
+            <meshStandardMaterial color="#111827" metalness={0.7} roughness={0.35} />
+          </mesh>
+          <mesh position={[0.42, 3.12, 0]}>
+            <sphereGeometry args={[0.11, 12, 12]} />
+            <meshStandardMaterial color="#fff2b3" emissive="#ffcf6a" emissiveIntensity={1.5} />
+          </mesh>
+          <pointLight position={[0.42, 3.12, 0]} intensity={0.45} distance={8} color="#ffcf6a" />
+        </group>
+      ))}
+
+      {/* Named real places from Google/OSM */}
+      {scene.landmarks.slice(0, 18).map((p, i) => (
+        <group key={`poi-${i}`} position={[p.position[0], 0, p.position[1]]}>
+          <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.75, 0.95, 28]} />
+            <meshBasicMaterial color={p.source === "google" ? "#38bdf8" : "#C9A84C"} transparent opacity={0.6} side={THREE.DoubleSide} />
+          </mesh>
+          <Html distanceFactor={22} position={[0, 1.35, 0]} center>
+            <div className="max-w-[140px] rounded-[3px] border border-border-subtle bg-background/75 px-2 py-1 text-center text-[9px] font-semibold text-text-secondary shadow-md backdrop-blur-sm">
+              {p.label}
+            </div>
+          </Html>
+        </group>
+      ))}
+
       {/* Incident anchor marker */}
       <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[1.4, 1.7, 40]} />
+        <meshBasicMaterial color="#C9A84C" transparent opacity={0.75} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+function RealLocationShell() {
+  return (
+    <group>
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[520, 520]} />
+        <meshStandardMaterial color="#496242" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.4, 1.8, 40]} />
         <meshBasicMaterial color="#C9A84C" transparent opacity={0.75} side={THREE.DoubleSide} />
       </mesh>
     </group>
@@ -630,10 +502,29 @@ function ZoomBridge() {
   return null;
 }
 
+function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; events: SceneEvent[] }) {
+  const { camera } = useThree();
+  const currentEvent = useSceneStore((s) => s.currentEvent);
+  const playing = useSceneStore((s) => s.playing);
+  useFrame(({ clock }) => {
+    if (!playing && events.length === 0) return;
+    const evt = events[Math.min(currentEvent, Math.max(0, events.length - 1))];
+    const entity = evt?.entity_id ? entities.find((e) => e.id === evt.entity_id) : entities[0];
+    const tx = evt?.dest_x ?? entity?.position_x ?? 0;
+    const tz = evt?.dest_z ?? entity?.position_z ?? 0;
+    const t = clock.getElapsedTime() * 0.22;
+    const target = new THREE.Vector3(tx, 0.8, tz);
+    const desired = new THREE.Vector3(tx + Math.cos(t) * 18, 9 + Math.sin(t * 0.7) * 1.2, tz + Math.sin(t) * 18);
+    camera.position.lerp(desired, 0.012);
+    camera.lookAt(target);
+  });
+  return null;
+}
+
 export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProps) {
-  const actorEntities = entities.filter(e => e.entity_type === "actor" || e.entity_type === "vehicle");
+  const actorEntities = entities.filter(e => e.entity_type === "actor");
+  const vehicleEntities = entities.filter(e => e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
-  const useReal = !!(realWorld && (realWorld.buildings.length > 0 || realWorld.roads.length > 0));
 
   return (
     <Canvas
@@ -664,12 +555,16 @@ export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProp
       <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
       <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
-      {useReal ? <RealWorldEnvironment scene={realWorld!} /> : <CityEnvironment />}
+      {realWorld ? <RealWorldEnvironment scene={realWorld} /> : <RealLocationShell />}
 
       <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 
       {actorEntities.map((e) => (
         <HumanFigure key={e.id} entity={e} events={events} />
+      ))}
+
+      {vehicleEntities.map((e) => (
+        <VehicleFigure key={e.id} entity={e} events={events} />
       ))}
 
       {locationEntities.map((l) => (
@@ -679,6 +574,7 @@ export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProp
       <MovementTrails entities={entities} events={events} />
 
       <ZoomBridge />
+      <CinematicCameraBridge entities={entities} events={events} />
       <RecorderBridge />
 
       <OrbitControls
