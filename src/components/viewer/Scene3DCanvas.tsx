@@ -191,6 +191,78 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
   );
 }
 
+function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
+  const rootRef = useRef<THREE.Group>(null);
+  const currentEvent = useSceneStore((s) => s.currentEvent);
+
+  const positions = useMemo(() => {
+    if (events.length === 0) return [[entity.position_x || 0, 0, entity.position_z || 0]];
+    let pos = [entity.position_x || 0, 0, entity.position_z || 0];
+    const result: number[][] = [];
+    for (let i = 0; i < events.length; i++) {
+      const evt = events.find((e) => e.sequence_number === i + 1 && e.entity_id === entity.id);
+      if (evt) pos = [evt.dest_x || pos[0], 0, evt.dest_z || pos[2]];
+      result.push([...pos]);
+    }
+    return result;
+  }, [entity, events]);
+
+  const targetPos = useMemo(() => {
+    const p = positions[Math.min(currentEvent, positions.length - 1)];
+    return new THREE.Vector3(p[0], 0, p[2]);
+  }, [currentEvent, positions]);
+
+  useFrame(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const prev = root.position.clone();
+    root.position.lerp(targetPos, 0.055);
+    const dir = new THREE.Vector3().subVectors(root.position, prev);
+    if (dir.lengthSq() > 0.00005) root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, Math.atan2(dir.x, dir.z), 0.12);
+  });
+
+  const color = entity.color || "#C9A84C";
+  return (
+    <group ref={rootRef} position={[positions[0][0], 0, positions[0][2]]}>
+      <mesh castShadow receiveShadow position={[0, 0.36, 0]}>
+        <boxGeometry args={[2.35, 0.55, 1.12]} />
+        <meshStandardMaterial color={color} metalness={0.55} roughness={0.28} />
+      </mesh>
+      <mesh castShadow position={[-0.12, 0.82, -0.02]}>
+        <boxGeometry args={[1.22, 0.5, 1.02]} />
+        <meshStandardMaterial color={color} metalness={0.48} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.1, 0.84, 0.502]}>
+        <planeGeometry args={[1.0, 0.32]} />
+        <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
+      </mesh>
+      <mesh position={[-0.1, 0.84, -0.502]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[1.0, 0.32]} />
+        <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
+      </mesh>
+      {([[-0.78, 0.2, 0.54], [0.78, 0.2, 0.54], [-0.78, 0.2, -0.54], [0.78, 0.2, -0.54]] as [number, number, number][]).map((w, i) => (
+        <mesh key={i} position={w} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.23, 0.23, 0.18, 20]} />
+          <meshStandardMaterial color="#080808" roughness={0.86} />
+        </mesh>
+      ))}
+      <mesh position={[1.2, 0.38, 0.33]}>
+        <sphereGeometry args={[0.07, 10, 10]} />
+        <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
+      </mesh>
+      <mesh position={[1.2, 0.38, -0.33]}>
+        <sphereGeometry args={[0.07, 10, 10]} />
+        <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
+      </mesh>
+      <Html distanceFactor={12} position={[0, 1.65, 0]} center>
+        <div className="rounded-full border border-gold/50 bg-background/75 px-2 py-0.5 text-[10px] font-semibold text-gold backdrop-blur-sm whitespace-nowrap">
+          {entity.label}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 /**
  * Procedural city block — asphalt roads with lane markings, sidewalks with
  * curbs, varied buildings with lit windows, trees, streetlights, benches,
@@ -534,10 +606,10 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
 
   return (
     <group>
-      {/* Grass ground */}
+      {/* Real-location ground canvas. Even when map providers lack footprints, this stays anchored to the FIR lat/lng. */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
         <planeGeometry args={[scene.radiusMeters * 4, scene.radiusMeters * 4]} />
-        <meshStandardMaterial color="#3d5a34" roughness={1} />
+        <meshStandardMaterial color="#496242" roughness={1} />
       </mesh>
 
       {/* Roads */}
@@ -574,9 +646,54 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         </group>
       ))}
 
+      {/* Street lights from OSM or location-anchored inference */}
+      {scene.streetLights.map(([x, z], i) => (
+        <group key={`lamp-${i}`} position={[x, 0, z]}>
+          <mesh castShadow position={[0, 1.6, 0]}>
+            <cylinderGeometry args={[0.035, 0.045, 3.2, 8]} />
+            <meshStandardMaterial color="#111827" metalness={0.7} roughness={0.35} />
+          </mesh>
+          <mesh position={[0.42, 3.12, 0]}>
+            <sphereGeometry args={[0.11, 12, 12]} />
+            <meshStandardMaterial color="#fff2b3" emissive="#ffcf6a" emissiveIntensity={1.5} />
+          </mesh>
+          <pointLight position={[0.42, 3.12, 0]} intensity={0.45} distance={8} color="#ffcf6a" />
+        </group>
+      ))}
+
+      {/* Named real places from Google/OSM */}
+      {scene.landmarks.slice(0, 18).map((p, i) => (
+        <group key={`poi-${i}`} position={[p.position[0], 0, p.position[1]]}>
+          <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.75, 0.95, 28]} />
+            <meshBasicMaterial color={p.source === "google" ? "#38bdf8" : "#C9A84C"} transparent opacity={0.6} side={THREE.DoubleSide} />
+          </mesh>
+          <Html distanceFactor={22} position={[0, 1.35, 0]} center>
+            <div className="max-w-[140px] rounded-[3px] border border-border-subtle bg-background/75 px-2 py-1 text-center text-[9px] font-semibold text-text-secondary shadow-md backdrop-blur-sm">
+              {p.label}
+            </div>
+          </Html>
+        </group>
+      ))}
+
       {/* Incident anchor marker */}
       <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[1.4, 1.7, 40]} />
+        <meshBasicMaterial color="#C9A84C" transparent opacity={0.75} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+function RealLocationShell() {
+  return (
+    <group>
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[520, 520]} />
+        <meshStandardMaterial color="#496242" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.4, 1.8, 40]} />
         <meshBasicMaterial color="#C9A84C" transparent opacity={0.75} side={THREE.DoubleSide} />
       </mesh>
     </group>
@@ -630,10 +747,29 @@ function ZoomBridge() {
   return null;
 }
 
+function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; events: SceneEvent[] }) {
+  const { camera } = useThree();
+  const currentEvent = useSceneStore((s) => s.currentEvent);
+  const playing = useSceneStore((s) => s.playing);
+  useFrame(({ clock }) => {
+    if (!playing && events.length === 0) return;
+    const evt = events[Math.min(currentEvent, Math.max(0, events.length - 1))];
+    const entity = evt?.entity_id ? entities.find((e) => e.id === evt.entity_id) : entities[0];
+    const tx = evt?.dest_x ?? entity?.position_x ?? 0;
+    const tz = evt?.dest_z ?? entity?.position_z ?? 0;
+    const t = clock.getElapsedTime() * 0.22;
+    const target = new THREE.Vector3(tx, 0.8, tz);
+    const desired = new THREE.Vector3(tx + Math.cos(t) * 18, 9 + Math.sin(t * 0.7) * 1.2, tz + Math.sin(t) * 18);
+    camera.position.lerp(desired, 0.012);
+    camera.lookAt(target);
+  });
+  return null;
+}
+
 export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProps) {
-  const actorEntities = entities.filter(e => e.entity_type === "actor" || e.entity_type === "vehicle");
+  const actorEntities = entities.filter(e => e.entity_type === "actor");
+  const vehicleEntities = entities.filter(e => e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
-  const useReal = !!(realWorld && (realWorld.buildings.length > 0 || realWorld.roads.length > 0));
 
   return (
     <Canvas
@@ -664,12 +800,16 @@ export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProp
       <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
       <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
-      {useReal ? <RealWorldEnvironment scene={realWorld!} /> : <CityEnvironment />}
+      {realWorld ? <RealWorldEnvironment scene={realWorld} /> : <RealLocationShell />}
 
       <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 
       {actorEntities.map((e) => (
         <HumanFigure key={e.id} entity={e} events={events} />
+      ))}
+
+      {vehicleEntities.map((e) => (
+        <VehicleFigure key={e.id} entity={e} events={events} />
       ))}
 
       {locationEntities.map((l) => (
@@ -679,6 +819,7 @@ export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProp
       <MovementTrails entities={entities} events={events} />
 
       <ZoomBridge />
+      <CinematicCameraBridge entities={entities} events={events} />
       <RecorderBridge />
 
       <OrbitControls
