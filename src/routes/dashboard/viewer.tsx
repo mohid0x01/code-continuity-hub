@@ -67,7 +67,6 @@ function SceneViewer() {
   const [rightOpen, setRightOpen] = useState(true);
   const [showSource, setShowSource] = useState(false);
   const [tab, setTab] = useState<"scene" | "video" | "evidence" | "source">("scene");
-  const queueVideoFn = useServerFn(queueVideoGeneration);
   const uploadVideoFn = useServerFn(uploadRenderedVideo);
   const logFn = useServerFn(logAuditEvent);
   const fetchSceneFn = useServerFn(fetchLocationScene);
@@ -337,7 +336,7 @@ function SceneViewer() {
       setRecording(false);
       setPlaying(false);
     }
-  }, [jobId, events.length, queueVideoFn, uploadVideoFn, logFn, setCurrentEvent, setPlaying, setSpeed]);
+  }, [jobId, events.length, uploadVideoFn, logFn, setCurrentEvent, setPlaying, setSpeed]);
 
   const handlePdfExport = useCallback(async () => {
     if (!firRec) { toast.error("FIR data not loaded yet"); return; }
@@ -532,7 +531,7 @@ function SceneViewer() {
             <h3 className="label-uppercase mb-3">Reconstruction Data</h3>
 
             <div className="space-y-3">
-              {renderActorEntities.map((e) => (
+              {[...renderActorEntities, ...renderVehicleEntities].map((e) => (
                 <div key={e.id}>
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-text-secondary">{e.label.split(" (")[0]}</span>
