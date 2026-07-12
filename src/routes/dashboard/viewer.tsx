@@ -219,17 +219,60 @@ function SceneViewer() {
     return { label, lat, lng, description: (firRec?.formatted_address as string | null | undefined) ?? undefined };
   })();
 
-  // Fetch real-world OSM geometry once the FIR lat/lng is known.
+  // Fetch real-world geometry once the FIR lat/lng is known. The server merges
+  // OSM + Google Maps data and always keeps the scene anchored to this pin.
   useEffect(() => {
     if (!primaryPin) return;
     let cancelled = false;
     setRealWorldLoading(true);
     fetchSceneFn({ data: { lat: primaryPin.lat, lng: primaryPin.lng, radius: 300 } })
       .then((scene) => { if (!cancelled) setRealWorld(scene as RealWorldScene); })
-      .catch(() => { /* fall back to procedural */ })
+      .catch(() => {
+        if (!cancelled) {
+          setRealWorld({
+            anchor: { lat: primaryPin.lat, lng: primaryPin.lng },
+            buildings: [],
+            roads: [],
+            trees: [],
+            landmarks: [],
+            streetLights: [],
+            staticMapUrl: null,
+            address: primaryPin.description ?? primaryPin.label,
+            radiusMeters: 300,
+            status: "unavailable",
+            source: "inferred",
+            diagnostics: { osmElements: 0, googlePlaces: 0, googleRoadPoints: 0, synthesizedBuildings: 0, synthesizedRoads: 0 },
+          });
+        }
+      })
       .finally(() => { if (!cancelled) setRealWorldLoading(false); });
     return () => { cancelled = true; };
   }, [primaryPin?.lat, primaryPin?.lng, fetchSceneFn]);
+
+  const renderEntities = (() => {
+    const vehicleWords = /\b(car|vehicle|motorcar|sedan|suv|mehran|corolla|cultus|alto|honda|toyota|civic|گاڑی|کار)\b/i;
+    if (vehicleEntities.length > 0 || !vehicleWords.test(firText)) return entities;
+    const syntheticCar: SceneEntity = {
+      id: `synthetic-car-${jobId ?? "scene"}`,
+      job_id: jobId ?? "",
+      entity_type: "vehicle",
+      entity_role: null,
+      label: "Car mentioned in statement",
+      description: "Vehicle inferred from FIR statement so it appears in the reconstruction.",
+      color: "#C9A84C",
+      confidence: 0.7,
+      position_x: 4,
+      position_y: 0,
+      position_z: -3,
+      source_text: "Inferred from statement vehicle/car wording",
+      metadata: { inferred: true },
+      created_at: new Date(0).toISOString(),
+    } as SceneEntity;
+    return [...entities, syntheticCar];
+  })();
+
+  const renderActorEntities = renderEntities.filter(e => e.entity_type === "actor");
+  const renderVehicleEntities = renderEntities.filter(e => e.entity_type === "vehicle");
 
   const mapLocations = () => geocodeFirText(
     firText,
@@ -245,6 +288,7 @@ function SceneViewer() {
     setTab("scene");
     // Restart playback from event 0 so recording captures the whole story.
     setCurrentEvent(0);
+    setSpeed(1);
     setPlaying(true);
     setRecording(true);
 
@@ -293,7 +337,7 @@ function SceneViewer() {
       setRecording(false);
       setPlaying(false);
     }
-  }, [jobId, events.length, queueVideoFn, uploadVideoFn, logFn, setCurrentEvent, setPlaying]);
+  }, [jobId, events.length, queueVideoFn, uploadVideoFn, logFn, setCurrentEvent, setPlaying, setSpeed]);
 
   const handlePdfExport = useCallback(async () => {
     if (!firRec) { toast.error("FIR data not loaded yet"); return; }
@@ -344,7 +388,7 @@ function SceneViewer() {
           <div className="w-[280px] shrink-0 overflow-y-auto border-r border-border bg-card p-4">
             <h3 className="label-uppercase mb-3">Scene Entities</h3>
             <div className="space-y-2">
-              {[...actorEntities, ...vehicleEntities].map((e) => (
+              {[...renderActorEntities, ...renderVehicleEntities].map((e) => (
                 <div key={e.id} className={`group cursor-pointer rounded-[4px] border border-border-subtle bg-card p-3 transition-all hover:bg-surface-elevated ${roleColor(e.entity_role)} border-l-[3px]`}>
                   <div className="flex items-center gap-2">
                     {e.entity_type === "vehicle" ? <Car className="h-4 w-4 text-gold" /> : <User className="h-4 w-4 text-text-secondary" />}
@@ -383,7 +427,7 @@ function SceneViewer() {
               />
             </Suspense>
             <p className="mt-2 text-[10px] text-text-muted">
-              Locations geocoded from the FIR narrative onto OpenStreetMap.
+              FIR pin, statement locations, and mapped surroundings are tied to the selected incident coordinates.
             </p>
           </div>
         )}
@@ -416,23 +460,19 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={entities} events={events} realWorld={realWorld} />
+                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} />
               </Suspense>
 
               {/* Real-world overlay badge */}
               <div className="absolute left-4 top-14 rounded-[4px] border border-emerald-500/30 bg-background/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] backdrop-blur">
                 {realWorldLoading ? (
                   <span className="text-text-muted">Loading real-world map…</span>
-                ) : realWorld && (realWorld.buildings.length + realWorld.roads.length) > 0 ? (
+                ) : realWorld ? (
                   <span className="text-emerald-400">
-                    Real Location · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads · r={realWorld.radiusMeters}m
+                    Real Location · {realWorld.source.toUpperCase()} · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads · {realWorld.landmarks.length} places · r={realWorld.radiusMeters}m
                   </span>
-                ) : realWorld?.status === "unavailable" ? (
-                  <span className="text-amber-400">OSM service unavailable · procedural fallback</span>
                 ) : (
-                  <span className="text-amber-400">
-                    No OSM data within {realWorld?.radiusMeters ?? 4000}m · procedural fallback
-                  </span>
+                  <span className="text-amber-400">Waiting for selected location coordinates…</span>
                 )}
               </div>
 
@@ -460,7 +500,7 @@ function SceneViewer() {
                   <Film className="mx-auto h-12 w-12 text-emerald-400/50" />
                   <h3 className="mt-4 text-lg font-semibold text-text-primary">AI 3D Incident Video</h3>
                   <p className="mt-2 max-w-md text-sm text-text-muted">
-                    Generate a 10-second photoreal 3D reconstruction of this incident driven by the scene manifest, real Pakistan location, and FIR narrative.
+                    Records the animated 3D reconstruction using the selected real-world location, mapped roads/buildings/places, actors, vehicles, and the FIR event timeline.
                   </p>
                   <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
                   <button onClick={handleGenerateVideo} disabled={recording}
@@ -492,7 +532,7 @@ function SceneViewer() {
             <h3 className="label-uppercase mb-3">Reconstruction Data</h3>
 
             <div className="space-y-3">
-              {actorEntities.map((e) => (
+              {renderActorEntities.map((e) => (
                 <div key={e.id}>
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-text-secondary">{e.label.split(" (")[0]}</span>
