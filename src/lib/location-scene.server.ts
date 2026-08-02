@@ -25,6 +25,36 @@ const OVERPASS_MIRRORS = [
   "https://overpass.openstreetmap.ru/api/interpreter",
 ];
 
+// ---------------------------------------------------------------------------
+// Deterministic cache + retry
+// A given lat/lng (rounded to ~1m) always resolves to the exact same scene for
+// the cache lifetime, so the viewer never flips between a rich render and an
+// empty one on re-mounts or retries.
+// ---------------------------------------------------------------------------
+const SCENE_CACHE = new Map<string, { at: number; scene: RealWorldScene }>();
+const SCENE_CACHE_TTL_MS = 30 * 60 * 1000;
+const INFLIGHT = new Map<string, Promise<RealWorldScene>>();
+
+export function sceneCacheKey(lat: number, lng: number, radius: number) {
+  return `${lat.toFixed(5)}:${lng.toFixed(5)}:${Math.round(radius)}`;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retries a fetch-ish task with deterministic backoff (250ms, 750ms, 1750ms). */
+async function withRetry<T>(label: string, attempts: number, task: () => Promise<T>): Promise<T | null> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const result = await task();
+      if (result !== null && result !== undefined) return result;
+    } catch (err) {
+      console.warn(`[location-scene] ${label} attempt ${i + 1} failed`, err);
+    }
+    if (i < attempts - 1) await sleep(250 * (1 + i * 2));
+  }
+  return null;
+}
+
 type OverpassElement = {
   type: string;
   id?: number;
@@ -134,17 +164,16 @@ function rectangleFootprint(x: number, z: number, width: number, depth: number, 
 
 async function overpassQuery(body: string): Promise<{ elements?: OverpassElement[] } | null> {
   for (const url of OVERPASS_MIRRORS) {
-    try {
+    const json = await withRetry(`overpass ${url}`, 2, async () => {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "data=" + encodeURIComponent(body),
       });
-      if (res.ok) return await res.json();
-      console.warn(`Overpass mirror ${url} returned ${res.status}`);
-    } catch (err) {
-      console.warn(`Overpass mirror ${url} failed`, err);
-    }
+      if (!res.ok) throw new Error(`mirror returned ${res.status}`);
+      return (await res.json()) as { elements?: OverpassElement[] };
+    });
+    if (json) return json;
   }
   return null;
 }
@@ -156,16 +185,20 @@ async function googleGateway(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${lovableKey}`);
   headers.set("X-Connection-Api-Key", mapsKey);
-  const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
-    ...init,
-    headers,
+  return withRetry(`google ${path.split("?")[0]}`, 2, async () => {
+    const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
+      ...init,
+      headers,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      // 4xx are permanent (key restrictions) — don't burn a retry silently.
+      console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
+      if (res.status >= 400 && res.status < 500) return null;
+      throw new Error(`gateway ${res.status}`);
+    }
+    return res;
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
-    return null;
-  }
-  return res;
 }
 
 async function fetchStaticMap(lat: number, lng: number, radius: number) {
@@ -347,6 +380,28 @@ function fillAnchoredDetail(scene: RealWorldScene, radius: number) {
 }
 
 export async function buildRealWorldScene(input: { lat: number; lng: number; radius?: number }): Promise<RealWorldScene> {
+  const key = sceneCacheKey(input.lat, input.lng, input.radius ?? 300);
+  const cached = SCENE_CACHE.get(key);
+  if (cached && Date.now() - cached.at < SCENE_CACHE_TTL_MS) return cached.scene;
+
+  const inflight = INFLIGHT.get(key);
+  if (inflight) return inflight;
+
+  const task = (async () => {
+    const scene = await buildRealWorldSceneUncached(input);
+    // Only cache renders that actually carry geometry, so a transient upstream
+    // outage can't pin an empty scene to this location for 30 minutes.
+    if (scene.buildings.length + scene.roads.length + scene.landmarks.length > 0) {
+      SCENE_CACHE.set(key, { at: Date.now(), scene });
+    }
+    return scene;
+  })().finally(() => INFLIGHT.delete(key));
+
+  INFLIGHT.set(key, task);
+  return task;
+}
+
+async function buildRealWorldSceneUncached(input: { lat: number; lng: number; radius?: number }): Promise<RealWorldScene> {
   const { lat, lng } = input;
   const startRadius = input.radius ?? 300;
   const radiusLadder = Array.from(new Set([startRadius, 500, 1000, 2000, 4000].filter((r) => r >= startRadius)));

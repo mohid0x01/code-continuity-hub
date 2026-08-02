@@ -37,6 +37,7 @@ import { exportCourtReportPDF } from "@/lib/pdf-export";
 import { EvidenceManager } from "@/components/EvidenceManager";
 import { fetchLocationScene } from "@/lib/location-scene.functions";
 import type { RealWorldScene } from "@/lib/location-scene.functions";
+import { deriveRenderEntities, buildRenderTimeline, diagnoseVehicles } from "@/lib/scene-render";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -46,18 +47,39 @@ const CrimeMap = lazy(() =>
 );
 import { geocodeFirText } from "@/components/CrimeMap";
 
-const searchSchema = z.object({ jobId: z.string().optional() });
+const searchSchema = z.object({ jobId: z.string().optional(), debug: z.coerce.boolean().optional() });
 
 export const Route = createFileRoute("/dashboard/viewer")({
-  validateSearch: (search) => searchSchema.parse(search),
+  // Never throw on odd query strings — a parse failure here renders the global
+  // "This page didn't load" shell instead of the viewer.
+  validateSearch: (search) => {
+    const parsed = searchSchema.safeParse(search);
+    return parsed.success ? parsed.data : {};
+  },
   component: SceneViewer,
+  errorComponent: ViewerError,
 });
+
+function ViewerError({ error }: { error: Error }) {
+  return (
+    <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+      <AlertTriangle className="h-8 w-8 text-amber-400" />
+      <h2 className="text-lg font-semibold text-text-primary">Viewer could not render this case</h2>
+      <p className="max-w-md text-sm text-text-muted">{error?.message || "Unknown rendering error."}</p>
+      <div className="mt-2 flex gap-2">
+        <button onClick={() => window.location.reload()} className="rounded-[6px] bg-emerald-500/15 px-4 py-2 text-sm text-emerald-400">Try again</button>
+        <Link to="/dashboard" className="rounded-[6px] border border-border-accent px-4 py-2 text-sm text-text-secondary">Back to dashboard</Link>
+      </div>
+    </div>
+  );
+}
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
 
 function SceneViewer() {
-  const { jobId } = Route.useSearch();
+  const { jobId, debug: debugSearch } = Route.useSearch();
+  const [debugOn, setDebugOn] = useState(Boolean(debugSearch));
   const job = useJobRealtime(jobId || null);
   const [entities, setEntities] = useState<SceneEntity[]>([]);
   const [events, setEvents] = useState<SceneEvent[]>([]);
@@ -248,27 +270,9 @@ function SceneViewer() {
     return () => { cancelled = true; };
   }, [primaryPin?.lat, primaryPin?.lng, fetchSceneFn]);
 
-  const renderEntities = (() => {
-    const vehicleWords = /\b(car|vehicle|motorcar|sedan|suv|mehran|corolla|cultus|alto|honda|toyota|civic|گاڑی|کار)\b/i;
-    if (vehicleEntities.length > 0 || !vehicleWords.test(firText)) return entities;
-    const syntheticCar: SceneEntity = {
-      id: `synthetic-car-${jobId ?? "scene"}`,
-      job_id: jobId ?? "",
-      entity_type: "vehicle",
-      entity_role: null,
-      label: "Car mentioned in statement",
-      description: "Vehicle inferred from FIR statement so it appears in the reconstruction.",
-      color: "#C9A84C",
-      confidence: 0.7,
-      position_x: 4,
-      position_y: 0,
-      position_z: -3,
-      source_text: "Inferred from statement vehicle/car wording",
-      metadata: { inferred: true },
-      created_at: new Date(0).toISOString(),
-    } as SceneEntity;
-    return [...entities, syntheticCar];
-  })();
+  const renderEntities = deriveRenderEntities(entities, firText, jobId);
+  const renderTimeline = buildRenderTimeline({ realWorld, entities, renderEntities, events });
+  const vehicleDiagnostics = diagnoseVehicles(renderEntities, firText);
 
   const renderActorEntities = renderEntities.filter(e => e.entity_type === "actor");
   const renderVehicleEntities = renderEntities.filter(e => e.entity_type === "vehicle");
@@ -372,6 +376,10 @@ function SceneViewer() {
           {job?.status === "completed" ? "Scene Reconstruction" : `Pipeline: ${job?.status || "loading"}`}
         </span>
         <div className="flex items-center gap-2">
+          <button onClick={() => setDebugOn((v) => !v)} title="Toggle real-location debug overlay"
+            className={`rounded-[4px] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${debugOn ? "bg-emerald-500/15 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
+            Debug
+          </button>
           <button onClick={() => handleZoom("in")} title="Zoom in" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomIn className="h-4 w-4" /></button>
           <button onClick={() => handleZoom("out")} title="Zoom out" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomOut className="h-4 w-4" /></button>
           <button onClick={handleDownload} title="Download JSON" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
@@ -459,7 +467,7 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} />
+                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} debug={debugOn} />
               </Suspense>
 
               {/* Real-world overlay badge */}
@@ -474,6 +482,42 @@ function SceneViewer() {
                   <span className="text-amber-400">Waiting for selected location coordinates…</span>
                 )}
               </div>
+
+              {debugOn && (
+                <div className="absolute left-4 top-24 max-h-[70%] w-[320px] overflow-y-auto rounded-[6px] border border-emerald-500/30 bg-background/85 p-3 text-[11px] backdrop-blur">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Real-location debug</p>
+                  <div className="space-y-1 font-mono text-text-secondary">
+                    <div>lat/lng: {primaryPin ? `${primaryPin.lat.toFixed(6)}, ${primaryPin.lng.toFixed(6)}` : "none"}</div>
+                    <div>address: {realWorld?.address ?? "—"}</div>
+                    <div>fetch: {realWorldLoading ? "loading" : realWorld?.status ?? "idle"} · source: {realWorld?.source ?? "—"}</div>
+                    <div>radius: {realWorld?.radiusMeters ?? "—"}m · static map: {realWorld?.staticMapUrl ? "yes" : "no"}</div>
+                    <div>osm elements: {realWorld?.diagnostics.osmElements ?? 0}</div>
+                    <div>google places: {realWorld?.diagnostics.googlePlaces ?? 0} · road pts: {realWorld?.diagnostics.googleRoadPoints ?? 0}</div>
+                    <div>synth buildings: {realWorld?.diagnostics.synthesizedBuildings ?? 0} · synth roads: {realWorld?.diagnostics.synthesizedRoads ?? 0}</div>
+                  </div>
+
+                  <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Vehicle diagnostics</p>
+                  {vehicleDiagnostics.length === 0 ? (
+                    <p className="text-text-muted">No vehicle mentioned in this statement.</p>
+                  ) : (
+                    vehicleDiagnostics.map((v) => (
+                      <div key={v.id} className={`mb-1 rounded-[4px] border p-2 ${v.visible ? "border-emerald-500/30 text-emerald-300" : "border-red-500/30 text-red-300"}`}>
+                        <div className="font-semibold">{v.label}{v.inferred ? " (inferred)" : ""}</div>
+                        <div className="font-mono text-[10px]">xyz {v.position.map((n) => n.toFixed(1)).join(", ")}</div>
+                        <div className="text-[10px]">{v.reason}</div>
+                      </div>
+                    ))
+                  )}
+
+                  <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Render timeline</p>
+                  {renderTimeline.map((s) => (
+                    <div key={s.id} className="mb-1 border-l-2 pl-2" style={{ borderColor: s.status === "ok" ? "#22c55e" : s.status === "warn" ? "#f59e0b" : "#64748b" }}>
+                      <div className="text-text-primary">{s.title}</div>
+                      <div className="text-[10px] text-text-muted">{s.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {realWorld?.staticMapUrl && (
                 <div className="absolute right-4 top-14 w-52 overflow-hidden rounded-[6px] border border-gold/30 bg-background/70 backdrop-blur">
@@ -575,6 +619,19 @@ function SceneViewer() {
               <div>Processing: <span className="font-mono text-text-secondary">{job?.processing_time_ms ? `${(job.processing_time_ms / 1000).toFixed(1)}s` : "—"}</span></div>
               <div>Entities: <span className="font-mono text-text-secondary">{entities.length}</span></div>
               <div>Events: <span className="font-mono text-text-secondary">{events.length}</span></div>
+            </div>
+
+            <h3 className="label-uppercase mb-3 mt-6">How this video is built</h3>
+            <div className="space-y-2">
+              {renderTimeline.map((s) => (
+                <div key={`panel-${s.id}`} className="rounded-[4px] border border-border-subtle bg-card p-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 rounded-full ${s.status === "ok" ? "bg-emerald-400" : s.status === "warn" ? "bg-amber-400" : "bg-text-muted"}`} />
+                    <span className="text-[11px] font-semibold text-text-primary">{s.title}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-text-muted">{s.detail}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
