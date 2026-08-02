@@ -13,6 +13,7 @@ interface Scene3DCanvasProps {
   entities: SceneEntity[];
   events: SceneEvent[];
   realWorld?: RealWorldScene | null;
+  debug?: boolean;
 }
 
 /**
