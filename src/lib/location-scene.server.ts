@@ -25,6 +25,36 @@ const OVERPASS_MIRRORS = [
   "https://overpass.openstreetmap.ru/api/interpreter",
 ];
 
+// ---------------------------------------------------------------------------
+// Deterministic cache + retry
+// A given lat/lng (rounded to ~1m) always resolves to the exact same scene for
+// the cache lifetime, so the viewer never flips between a rich render and an
+// empty one on re-mounts or retries.
+// ---------------------------------------------------------------------------
+const SCENE_CACHE = new Map<string, { at: number; scene: RealWorldScene }>();
+const SCENE_CACHE_TTL_MS = 30 * 60 * 1000;
+const INFLIGHT = new Map<string, Promise<RealWorldScene>>();
+
+export function sceneCacheKey(lat: number, lng: number, radius: number) {
+  return `${lat.toFixed(5)}:${lng.toFixed(5)}:${Math.round(radius)}`;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retries a fetch-ish task with deterministic backoff (250ms, 750ms, 1750ms). */
+async function withRetry<T>(label: string, attempts: number, task: () => Promise<T>): Promise<T | null> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const result = await task();
+      if (result !== null && result !== undefined) return result;
+    } catch (err) {
+      console.warn(`[location-scene] ${label} attempt ${i + 1} failed`, err);
+    }
+    if (i < attempts - 1) await sleep(250 * (1 + i * 2));
+  }
+  return null;
+}
+
 type OverpassElement = {
   type: string;
   id?: number;
