@@ -380,6 +380,28 @@ function fillAnchoredDetail(scene: RealWorldScene, radius: number) {
 }
 
 export async function buildRealWorldScene(input: { lat: number; lng: number; radius?: number }): Promise<RealWorldScene> {
+  const key = sceneCacheKey(input.lat, input.lng, input.radius ?? 300);
+  const cached = SCENE_CACHE.get(key);
+  if (cached && Date.now() - cached.at < SCENE_CACHE_TTL_MS) return cached.scene;
+
+  const inflight = INFLIGHT.get(key);
+  if (inflight) return inflight;
+
+  const task = (async () => {
+    const scene = await buildRealWorldSceneUncached(input);
+    // Only cache renders that actually carry geometry, so a transient upstream
+    // outage can't pin an empty scene to this location for 30 minutes.
+    if (scene.buildings.length + scene.roads.length + scene.landmarks.length > 0) {
+      SCENE_CACHE.set(key, { at: Date.now(), scene });
+    }
+    return scene;
+  })().finally(() => INFLIGHT.delete(key));
+
+  INFLIGHT.set(key, task);
+  return task;
+}
+
+async function buildRealWorldSceneUncached(input: { lat: number; lng: number; radius?: number }): Promise<RealWorldScene> {
   const { lat, lng } = input;
   const startRadius = input.radius ?? 300;
   const radiusLadder = Array.from(new Set([startRadius, 500, 1000, 2000, 4000].filter((r) => r >= startRadius)));
