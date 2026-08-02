@@ -376,6 +376,10 @@ function SceneViewer() {
           {job?.status === "completed" ? "Scene Reconstruction" : `Pipeline: ${job?.status || "loading"}`}
         </span>
         <div className="flex items-center gap-2">
+          <button onClick={() => setDebugOn((v) => !v)} title="Toggle real-location debug overlay"
+            className={`rounded-[4px] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${debugOn ? "bg-emerald-500/15 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
+            Debug
+          </button>
           <button onClick={() => handleZoom("in")} title="Zoom in" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomIn className="h-4 w-4" /></button>
           <button onClick={() => handleZoom("out")} title="Zoom out" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><ZoomOut className="h-4 w-4" /></button>
           <button onClick={handleDownload} title="Download JSON" className="rounded-[4px] p-1.5 text-text-muted hover:bg-surface hover:text-gold"><Download className="h-4 w-4" /></button>
