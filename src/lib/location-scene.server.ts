@@ -164,17 +164,16 @@ function rectangleFootprint(x: number, z: number, width: number, depth: number, 
 
 async function overpassQuery(body: string): Promise<{ elements?: OverpassElement[] } | null> {
   for (const url of OVERPASS_MIRRORS) {
-    try {
+    const json = await withRetry(`overpass ${url}`, 2, async () => {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "data=" + encodeURIComponent(body),
       });
-      if (res.ok) return await res.json();
-      console.warn(`Overpass mirror ${url} returned ${res.status}`);
-    } catch (err) {
-      console.warn(`Overpass mirror ${url} failed`, err);
-    }
+      if (!res.ok) throw new Error(`mirror returned ${res.status}`);
+      return (await res.json()) as { elements?: OverpassElement[] };
+    });
+    if (json) return json;
   }
   return null;
 }
@@ -186,16 +185,20 @@ async function googleGateway(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${lovableKey}`);
   headers.set("X-Connection-Api-Key", mapsKey);
-  const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
-    ...init,
-    headers,
+  return withRetry(`google ${path.split("?")[0]}`, 2, async () => {
+    const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
+      ...init,
+      headers,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      // 4xx are permanent (key restrictions) — don't burn a retry silently.
+      console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
+      if (res.status >= 400 && res.status < 500) return null;
+      throw new Error(`gateway ${res.status}`);
+    }
+    return res;
   });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
-    return null;
-  }
-  return res;
 }
 
 async function fetchStaticMap(lat: number, lng: number, radius: number) {
