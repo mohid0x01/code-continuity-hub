@@ -78,7 +78,8 @@ type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
 
 function SceneViewer() {
-  const { jobId } = Route.useSearch();
+  const { jobId, debug: debugSearch } = Route.useSearch();
+  const [debugOn, setDebugOn] = useState(Boolean(debugSearch));
   const job = useJobRealtime(jobId || null);
   const [entities, setEntities] = useState<SceneEntity[]>([]);
   const [events, setEvents] = useState<SceneEvent[]>([]);
@@ -269,27 +270,9 @@ function SceneViewer() {
     return () => { cancelled = true; };
   }, [primaryPin?.lat, primaryPin?.lng, fetchSceneFn]);
 
-  const renderEntities = (() => {
-    const vehicleWords = /\b(car|vehicle|motorcar|sedan|suv|mehran|corolla|cultus|alto|honda|toyota|civic|گاڑی|کار)\b/i;
-    if (vehicleEntities.length > 0 || !vehicleWords.test(firText)) return entities;
-    const syntheticCar: SceneEntity = {
-      id: `synthetic-car-${jobId ?? "scene"}`,
-      job_id: jobId ?? "",
-      entity_type: "vehicle",
-      entity_role: null,
-      label: "Car mentioned in statement",
-      description: "Vehicle inferred from FIR statement so it appears in the reconstruction.",
-      color: "#C9A84C",
-      confidence: 0.7,
-      position_x: 4,
-      position_y: 0,
-      position_z: -3,
-      source_text: "Inferred from statement vehicle/car wording",
-      metadata: { inferred: true },
-      created_at: new Date(0).toISOString(),
-    } as SceneEntity;
-    return [...entities, syntheticCar];
-  })();
+  const renderEntities = deriveRenderEntities(entities, firText, jobId);
+  const renderTimeline = buildRenderTimeline({ realWorld, entities, renderEntities, events });
+  const vehicleDiagnostics = diagnoseVehicles(renderEntities, firText);
 
   const renderActorEntities = renderEntities.filter(e => e.entity_type === "actor");
   const renderVehicleEntities = renderEntities.filter(e => e.entity_type === "vehicle");
