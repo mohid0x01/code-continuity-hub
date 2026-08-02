@@ -522,7 +522,47 @@ function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; 
   return null;
 }
 
-export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProps) {
+/**
+ * Draws a wireframe bounding box + label over every vehicle so a missing car
+ * can be traced to its exact coordinates instead of guessing.
+ */
+function VehicleDebugBounds({ entities }: { entities: SceneEntity[] }) {
+  const vehicles = entities.filter((e) => e.entity_type === "vehicle");
+  useEffect(() => {
+    if (vehicles.length === 0) {
+      console.warn("[SceneIQ:debug] no vehicle entities reached the renderer");
+      return;
+    }
+    for (const v of vehicles) {
+      console.info("[SceneIQ:debug] vehicle", {
+        id: v.id,
+        label: v.label,
+        pos: [v.position_x ?? 0, v.position_y ?? 0, v.position_z ?? 0],
+        inferred: Boolean((v.metadata as { inferred?: boolean } | null)?.inferred),
+      });
+    }
+  }, [vehicles.length, vehicles]);
+
+  return (
+    <>
+      {vehicles.map((v) => (
+        <group key={`dbg-${v.id}`} position={[v.position_x ?? 0, (v.position_y ?? 0) + 0.9, v.position_z ?? 0]}>
+          <mesh>
+            <boxGeometry args={[4.4, 1.9, 2.2]} />
+            <meshBasicMaterial color="#22c55e" wireframe transparent opacity={0.9} />
+          </mesh>
+          <Html center distanceFactor={16} position={[0, 1.6, 0]}>
+            <div style={{ background: "rgba(0,0,0,0.75)", color: "#22c55e", padding: "2px 6px", borderRadius: 4, fontSize: 10, whiteSpace: "nowrap" }}>
+              {v.label} · {(v.position_x ?? 0).toFixed(1)},{(v.position_z ?? 0).toFixed(1)}
+            </div>
+          </Html>
+        </group>
+      ))}
+    </>
+  );
+}
+
+export function Scene3DCanvas({ entities, events, realWorld, debug = false }: Scene3DCanvasProps) {
   const actorEntities = entities.filter(e => e.entity_type === "actor");
   const vehicleEntities = entities.filter(e => e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
@@ -573,6 +613,9 @@ export function Scene3DCanvas({ entities, events, realWorld }: Scene3DCanvasProp
       ))}
 
       <MovementTrails entities={entities} events={events} />
+
+      {debug && <VehicleDebugBounds entities={entities} />}
+      {debug && <axesHelper args={[10]} />}
 
       <ZoomBridge />
       <CinematicCameraBridge entities={entities} events={events} />
