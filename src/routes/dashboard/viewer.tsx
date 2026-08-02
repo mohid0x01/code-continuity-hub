@@ -620,6 +620,19 @@ function SceneViewer() {
               <div>Entities: <span className="font-mono text-text-secondary">{entities.length}</span></div>
               <div>Events: <span className="font-mono text-text-secondary">{events.length}</span></div>
             </div>
+
+            <h3 className="label-uppercase mb-3 mt-6">How this video is built</h3>
+            <div className="space-y-2">
+              {renderTimeline.map((s) => (
+                <div key={`panel-${s.id}`} className="rounded-[4px] border border-border-subtle bg-card p-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 rounded-full ${s.status === "ok" ? "bg-emerald-400" : s.status === "warn" ? "bg-amber-400" : "bg-text-muted"}`} />
+                    <span className="text-[11px] font-semibold text-text-primary">{s.title}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-text-muted">{s.detail}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
