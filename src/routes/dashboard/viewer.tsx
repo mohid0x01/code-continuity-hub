@@ -463,7 +463,7 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} />
+                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} debug={debugOn} />
               </Suspense>
 
               {/* Real-world overlay badge */}
@@ -478,6 +478,42 @@ function SceneViewer() {
                   <span className="text-amber-400">Waiting for selected location coordinates…</span>
                 )}
               </div>
+
+              {debugOn && (
+                <div className="absolute left-4 top-24 max-h-[70%] w-[320px] overflow-y-auto rounded-[6px] border border-emerald-500/30 bg-background/85 p-3 text-[11px] backdrop-blur">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Real-location debug</p>
+                  <div className="space-y-1 font-mono text-text-secondary">
+                    <div>lat/lng: {primaryPin ? `${primaryPin.lat.toFixed(6)}, ${primaryPin.lng.toFixed(6)}` : "none"}</div>
+                    <div>address: {realWorld?.address ?? "—"}</div>
+                    <div>fetch: {realWorldLoading ? "loading" : realWorld?.status ?? "idle"} · source: {realWorld?.source ?? "—"}</div>
+                    <div>radius: {realWorld?.radiusMeters ?? "—"}m · static map: {realWorld?.staticMapUrl ? "yes" : "no"}</div>
+                    <div>osm elements: {realWorld?.diagnostics.osmElements ?? 0}</div>
+                    <div>google places: {realWorld?.diagnostics.googlePlaces ?? 0} · road pts: {realWorld?.diagnostics.googleRoadPoints ?? 0}</div>
+                    <div>synth buildings: {realWorld?.diagnostics.synthesizedBuildings ?? 0} · synth roads: {realWorld?.diagnostics.synthesizedRoads ?? 0}</div>
+                  </div>
+
+                  <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Vehicle diagnostics</p>
+                  {vehicleDiagnostics.length === 0 ? (
+                    <p className="text-text-muted">No vehicle mentioned in this statement.</p>
+                  ) : (
+                    vehicleDiagnostics.map((v) => (
+                      <div key={v.id} className={`mb-1 rounded-[4px] border p-2 ${v.visible ? "border-emerald-500/30 text-emerald-300" : "border-red-500/30 text-red-300"}`}>
+                        <div className="font-semibold">{v.label}{v.inferred ? " (inferred)" : ""}</div>
+                        <div className="font-mono text-[10px]">xyz {v.position.map((n) => n.toFixed(1)).join(", ")}</div>
+                        <div className="text-[10px]">{v.reason}</div>
+                      </div>
+                    ))
+                  )}
+
+                  <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-400">Render timeline</p>
+                  {renderTimeline.map((s) => (
+                    <div key={s.id} className="mb-1 border-l-2 pl-2" style={{ borderColor: s.status === "ok" ? "#22c55e" : s.status === "warn" ? "#f59e0b" : "#64748b" }}>
+                      <div className="text-text-primary">{s.title}</div>
+                      <div className="text-[10px] text-text-muted">{s.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {realWorld?.staticMapUrl && (
                 <div className="absolute right-4 top-14 w-52 overflow-hidden rounded-[6px] border border-gold/30 bg-background/70 backdrop-blur">
