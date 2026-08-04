@@ -550,6 +550,10 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
     trees: [],
     landmarks: [],
     streetLights: [],
+    water: [],
+    landuse: [],
+    barriers: [],
+    crossings: [],
     staticMapUrl: null,
     address: null,
     radiusMeters: startRadius,
@@ -563,9 +567,17 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
       [out:json][timeout:25];
       (
         way["building"](around:${radius},${lat},${lng});
+        way["building:part"](around:${radius},${lat},${lng});
         way["highway"](around:${radius},${lat},${lng});
+        way["barrier"](around:${radius},${lat},${lng});
+        way["natural"="water"](around:${radius},${lat},${lng});
+        way["waterway"](around:${radius},${lat},${lng});
+        way["landuse"](around:${radius},${lat},${lng});
+        way["leisure"](around:${radius},${lat},${lng});
+        way["amenity"="parking"](around:${radius},${lat},${lng});
         node["natural"="tree"](around:${radius},${lat},${lng});
         node["highway"="street_lamp"](around:${radius},${lat},${lng});
+        node["highway"="crossing"](around:${radius},${lat},${lng});
         node["amenity"](around:${radius},${lat},${lng});
         node["shop"](around:${radius},${lat},${lng});
         node["tourism"](around:${radius},${lat},${lng});
@@ -582,7 +594,13 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
     scene.trees = [];
     scene.landmarks = [];
     scene.streetLights = [];
+    scene.water = [];
+    scene.landuse = [];
+    scene.barriers = [];
+    scene.crossings = [];
     scene.diagnostics.osmElements = json.elements?.length ?? 0;
+    scene.diagnostics.osmBuildings = 0;
+    scene.diagnostics.osmRoads = 0;
     applyOsmElements(scene, json.elements ?? [], lat, lng);
     if (scene.buildings.length + scene.roads.length + scene.landmarks.length > 0) {
       scene.status = "ok";
