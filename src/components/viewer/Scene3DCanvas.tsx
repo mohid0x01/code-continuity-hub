@@ -17,6 +17,24 @@ interface Scene3DCanvasProps {
 }
 
 /**
+ * Maps an FIR action label onto a body pose so the figure visibly performs the
+ * event (attack, flee, fall, aim, grab) instead of only translating.
+ */
+type ActionKind = "walk" | "run" | "attack" | "fall" | "aim" | "grab" | "flee" | "idle";
+
+function classifyAction(label: string | undefined): ActionKind {
+  const t = (label || "").toLowerCase();
+  if (/(fire|shoot|gun|goli|aim|pistol)/.test(t)) return "aim";
+  if (/(hit|attack|stab|strike|beat|assault|hamla|maar)/.test(t)) return "attack";
+  if (/(fall|collapse|injur|die|dead|gir|zakhmi)/.test(t)) return "fall";
+  if (/(snatch|grab|steal|rob|loot|cheen)/.test(t)) return "grab";
+  if (/(flee|escape|run away|farar|bhaag)/.test(t)) return "flee";
+  if (/(run|sprint|chase)/.test(t)) return "run";
+  if (/(walk|move|approach|arrive|enter|go)/.test(t)) return "walk";
+  return "idle";
+}
+
+/**
  * Fully-articulated humanoid rig built from primitives — head, neck, torso,
  * hips, upper/lower arms with hands, and upper/lower legs with feet. Limbs
  * swing on a sine wave keyed to movement speed so the figure "walks" between
@@ -30,6 +48,15 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
   const rightLegRef = useRef<THREE.Group>(null);
   const torsoRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((s) => s.currentEvent);
+
+  /** The action this entity is performing at the active timeline step. */
+  const action = useMemo<ActionKind>(() => {
+    const own = events.filter((e) => e.entity_id === entity.id);
+    const active = own
+      .filter((e) => (e.sequence_number ?? 0) <= currentEvent + 1)
+      .sort((a, b) => (b.sequence_number ?? 0) - (a.sequence_number ?? 0))[0];
+    return classifyAction(active?.action_label ?? active?.description ?? undefined);
+  }, [events, entity.id, currentEvent]);
 
   // Compute position per event from events data
   const positions = useMemo(() => {
@@ -60,7 +87,8 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
     if (!root) return;
 
     const prev = root.position.clone();
-    root.position.lerp(targetPos, 0.06);
+    const agility = action === "run" || action === "flee" ? 0.11 : action === "fall" ? 0.03 : 0.06;
+    root.position.lerp(targetPos, agility);
     const moved = root.position.distanceTo(prev);
     // EMA on step speed so animation blends in/out cleanly
     speedRef.current = THREE.MathUtils.lerp(speedRef.current, moved / Math.max(delta, 1 / 120), 0.15);
@@ -73,13 +101,53 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
 
     // Walk cycle — swing arms and legs proportional to travel speed.
     const t = performance.now() / 1000;
-    const swing = Math.min(speedRef.current * 1.6, 1);
-    const cycle = Math.sin(t * 6);
-    if (leftLegRef.current) leftLegRef.current.rotation.x = cycle * 0.75 * swing;
-    if (rightLegRef.current) rightLegRef.current.rotation.x = -cycle * 0.75 * swing;
-    if (leftArmRef.current) leftArmRef.current.rotation.x = -cycle * 0.6 * swing;
-    if (rightArmRef.current) rightArmRef.current.rotation.x = cycle * 0.6 * swing;
-    if (torsoRef.current) torsoRef.current.position.y = 0.9 + Math.abs(cycle) * 0.04 * swing;
+    const fast = action === "run" || action === "flee";
+    const swing = Math.min(speedRef.current * 1.6, 1) * (fast ? 1.35 : 1);
+    const cycle = Math.sin(t * (fast ? 9 : 6));
+    const idleBreath = Math.sin(t * 1.6) * 0.03;
+
+    // Base locomotion
+    let lLeg = cycle * 0.75 * swing;
+    let rLeg = -cycle * 0.75 * swing;
+    let lArm = -cycle * 0.6 * swing + idleBreath;
+    let rArm = cycle * 0.6 * swing - idleBreath;
+    let torsoY = 0.9 + Math.abs(cycle) * 0.04 * swing;
+    let torsoPitch = fast ? 0.22 : 0.02;
+    let rootTilt = 0;
+
+    // Action overlays — these dominate the pose when an event is active.
+    if (action === "attack") {
+      rArm = -2.0 + Math.sin(t * 9) * 0.55; // repeated overhead strike
+      lArm = 0.35;
+      torsoPitch = 0.25;
+    } else if (action === "aim") {
+      rArm = -1.55; // arm straight forward, weapon line
+      lArm = -1.35;
+      torsoPitch = 0.06;
+      lLeg *= 0.3;
+      rLeg *= 0.3;
+    } else if (action === "grab") {
+      rArm = -1.2 + Math.sin(t * 5) * 0.3;
+      lArm = -0.9;
+      torsoPitch = 0.3;
+    } else if (action === "fall") {
+      rootTilt = -Math.PI / 2.1; // collapsed on the ground
+      torsoY = 0.35;
+      lLeg = 0.4;
+      rLeg = 0.2;
+      lArm = 0.9;
+      rArm = 1.1;
+    }
+
+    if (leftLegRef.current) leftLegRef.current.rotation.x = lLeg;
+    if (rightLegRef.current) rightLegRef.current.rotation.x = rLeg;
+    if (leftArmRef.current) leftArmRef.current.rotation.x = lArm;
+    if (rightArmRef.current) rightArmRef.current.rotation.x = rArm;
+    if (torsoRef.current) {
+      torsoRef.current.position.y = torsoY;
+      torsoRef.current.rotation.x = THREE.MathUtils.lerp(torsoRef.current.rotation.x, torsoPitch, 0.15);
+    }
+    root.rotation.x = THREE.MathUtils.lerp(root.rotation.x, rootTilt, 0.1);
   });
 
   const roleTint = entity.entity_role === "suspect" ? "#ef4444"
