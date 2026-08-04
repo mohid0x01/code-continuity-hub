@@ -156,6 +156,54 @@ function inferBuildingHeight(tags: Record<string, string> | undefined): number {
   return 6;
 }
 
+/** Wall colour resolved from OSM tags so the render matches the real street. */
+function inferBuildingColor(tags: Record<string, string> | undefined): string | undefined {
+  if (!tags) return undefined;
+  const explicit = tags["building:colour"] || tags["building:color"];
+  if (explicit && /^#?[0-9a-fA-F]{3,8}$/.test(explicit.replace("#", "#"))) {
+    return explicit.startsWith("#") ? explicit : `#${explicit}`;
+  }
+  const named: Record<string, string> = {
+    white: "#e8e4dc", grey: "#b9b6b0", gray: "#b9b6b0", beige: "#ddcfb2",
+    brown: "#8d6a45", yellow: "#e0c579", red: "#b5613f", green: "#7d9b76",
+    blue: "#7d95b5", sand: "#dcc79c", cream: "#e6dcc2",
+  };
+  if (explicit && named[explicit.toLowerCase()]) return named[explicit.toLowerCase()];
+  const material = (tags["building:material"] || tags.material || "").toLowerCase();
+  if (material.includes("brick")) return "#9c5f45";
+  if (material.includes("concrete")) return "#b8b5ae";
+  if (material.includes("plaster")) return "#ddd4c2";
+  if (material.includes("mud") || material.includes("clay")) return "#b08a5f";
+  if (material.includes("metal")) return "#9aa4ac";
+  return undefined;
+}
+
+/** Polygon area (m²) via the shoelace formula on projected metre coordinates. */
+function polygonArea(pts: Array<[number, number]>): number {
+  let a = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    a += pts[i][0] * pts[i + 1][1] - pts[i + 1][0] * pts[i][1];
+  }
+  return Math.abs(a / 2);
+}
+
+function polygonCentroid(pts: Array<[number, number]>): [number, number] {
+  let x = 0;
+  let z = 0;
+  for (const [px, pz] of pts) {
+    x += px;
+    z += pz;
+  }
+  return [x / pts.length, z / pts.length];
+}
+
+function isClosed(pts: Array<[number, number]>) {
+  if (pts.length < 4) return false;
+  const [ax, az] = pts[0];
+  const [bx, bz] = pts[pts.length - 1];
+  return Math.hypot(ax - bx, az - bz) < 0.5;
+}
+
 function roadWidth(kind: string): number {
   switch (kind) {
     case "motorway":
@@ -180,6 +228,19 @@ function roadWidth(kind: string): number {
     default:
       return 5;
   }
+}
+
+/** Lane-accurate width: OSM `width` wins, then lanes × 3.2m, then class default. */
+function resolvedRoadWidth(tags: Record<string, string>): { width: number; lanes?: number } {
+  const explicit = parseFloat(tags.width ?? "");
+  const lanes = parseInt(tags.lanes ?? "", 10);
+  if (Number.isFinite(explicit) && explicit > 0.8) {
+    return { width: Math.min(explicit, 40), lanes: Number.isFinite(lanes) ? lanes : undefined };
+  }
+  if (Number.isFinite(lanes) && lanes > 0) {
+    return { width: Math.min(lanes * 3.2 + 0.8, 40), lanes };
+  }
+  return { width: roadWidth(tags.highway) };
 }
 
 function rectangleFootprint(x: number, z: number, width: number, depth: number, angle = 0): Array<[number, number]> {
