@@ -1,10 +1,36 @@
 export interface RealWorldScene {
   anchor: { lat: number; lng: number };
-  buildings: { footprint: Array<[number, number]>; height: number; label?: string; source?: "osm" | "google" | "inferred" }[];
-  roads: { path: Array<[number, number]>; width: number; kind: string; source?: "osm" | "google" | "inferred" }[];
+  buildings: {
+    footprint: Array<[number, number]>;
+    height: number;
+    label?: string;
+    source?: "osm" | "google" | "inferred";
+    /** Roof/wall colour hints resolved from OSM tags (building:colour, material). */
+    color?: string;
+    kind?: string;
+    levels?: number;
+  }[];
+  roads: {
+    path: Array<[number, number]>;
+    width: number;
+    kind: string;
+    source?: "osm" | "google" | "inferred";
+    lanes?: number;
+    oneway?: boolean;
+    surface?: string;
+    name?: string;
+  }[];
   trees: Array<[number, number]>;
   landmarks: { label: string; kind: string; position: [number, number]; source: "osm" | "google" }[];
   streetLights: Array<[number, number]>;
+  /** Rivers, canals, ponds as closed polygons (rendered as water planes). */
+  water?: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  /** Parks, farmland, residential blocks etc. — flat coloured ground patches. */
+  landuse?: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  /** Walls, fences, hedges as low extruded lines. */
+  barriers?: Array<{ path: Array<[number, number]>; kind: string; height: number }>;
+  /** Pedestrian crossings — striped zebra decals on roads. */
+  crossings?: Array<[number, number]>;
   staticMapUrl: string | null;
   address: string | null;
   radiusMeters: number;
@@ -16,6 +42,9 @@ export interface RealWorldScene {
     googleRoadPoints: number;
     synthesizedBuildings: number;
     synthesizedRoads: number;
+    osmBuildings?: number;
+    osmRoads?: number;
+    dedupedGoogleBuildings?: number;
   };
 }
 
@@ -127,6 +156,54 @@ function inferBuildingHeight(tags: Record<string, string> | undefined): number {
   return 6;
 }
 
+/** Wall colour resolved from OSM tags so the render matches the real street. */
+function inferBuildingColor(tags: Record<string, string> | undefined): string | undefined {
+  if (!tags) return undefined;
+  const explicit = tags["building:colour"] || tags["building:color"];
+  if (explicit && /^#?[0-9a-fA-F]{3,8}$/.test(explicit.replace("#", "#"))) {
+    return explicit.startsWith("#") ? explicit : `#${explicit}`;
+  }
+  const named: Record<string, string> = {
+    white: "#e8e4dc", grey: "#b9b6b0", gray: "#b9b6b0", beige: "#ddcfb2",
+    brown: "#8d6a45", yellow: "#e0c579", red: "#b5613f", green: "#7d9b76",
+    blue: "#7d95b5", sand: "#dcc79c", cream: "#e6dcc2",
+  };
+  if (explicit && named[explicit.toLowerCase()]) return named[explicit.toLowerCase()];
+  const material = (tags["building:material"] || tags.material || "").toLowerCase();
+  if (material.includes("brick")) return "#9c5f45";
+  if (material.includes("concrete")) return "#b8b5ae";
+  if (material.includes("plaster")) return "#ddd4c2";
+  if (material.includes("mud") || material.includes("clay")) return "#b08a5f";
+  if (material.includes("metal")) return "#9aa4ac";
+  return undefined;
+}
+
+/** Polygon area (m²) via the shoelace formula on projected metre coordinates. */
+function polygonArea(pts: Array<[number, number]>): number {
+  let a = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    a += pts[i][0] * pts[i + 1][1] - pts[i + 1][0] * pts[i][1];
+  }
+  return Math.abs(a / 2);
+}
+
+function polygonCentroid(pts: Array<[number, number]>): [number, number] {
+  let x = 0;
+  let z = 0;
+  for (const [px, pz] of pts) {
+    x += px;
+    z += pz;
+  }
+  return [x / pts.length, z / pts.length];
+}
+
+function isClosed(pts: Array<[number, number]>) {
+  if (pts.length < 4) return false;
+  const [ax, az] = pts[0];
+  const [bx, bz] = pts[pts.length - 1];
+  return Math.hypot(ax - bx, az - bz) < 0.5;
+}
+
 function roadWidth(kind: string): number {
   switch (kind) {
     case "motorway":
@@ -151,6 +228,19 @@ function roadWidth(kind: string): number {
     default:
       return 5;
   }
+}
+
+/** Lane-accurate width: OSM `width` wins, then lanes × 3.2m, then class default. */
+function resolvedRoadWidth(tags: Record<string, string>): { width: number; lanes?: number } {
+  const explicit = parseFloat(tags.width ?? "");
+  const lanes = parseInt(tags.lanes ?? "", 10);
+  if (Number.isFinite(explicit) && explicit > 0.8) {
+    return { width: Math.min(explicit, 40), lanes: Number.isFinite(lanes) ? lanes : undefined };
+  }
+  if (Number.isFinite(lanes) && lanes > 0) {
+    return { width: Math.min(lanes * 3.2 + 0.8, 40), lanes };
+  }
+  return { width: roadWidth(tags.highway) };
 }
 
 function rectangleFootprint(x: number, z: number, width: number, depth: number, angle = 0): Array<[number, number]> {
@@ -220,6 +310,19 @@ async function fetchReverseAddress(lat: number, lng: number) {
   return json?.results?.[0]?.formatted_address ?? null;
 }
 
+/**
+ * Precision resolver for the location picker: turns an exact lat/lng into the
+ * nearest real street address plus a Google static satellite thumbnail so the
+ * officer visually confirms the pin before the FIR is saved.
+ */
+export async function resolveExactPoint(lat: number, lng: number) {
+  const [address, staticMapUrl] = await Promise.all([
+    fetchReverseAddress(lat, lng).catch(() => null),
+    fetchStaticMap(lat, lng, 250).catch(() => null),
+  ]);
+  return { lat, lng, address, staticMapUrl };
+}
+
 async function fetchGooglePlaces(lat: number, lng: number, radius: number) {
   const queries = [
     `buildings shops schools mosques hospitals police near ${lat},${lng}`,
@@ -274,10 +377,45 @@ function applyOsmElements(scene: RealWorldScene, elements: OverpassElement[], la
     const tags = el.tags ?? {};
     if (el.type === "way" && el.geometry && el.geometry.length >= 2) {
       const pts: Array<[number, number]> = el.geometry.map((p) => project(p.lat, p.lon, lat, lng));
-      if (tags.building) {
-        scene.buildings.push({ footprint: pts, height: inferBuildingHeight(tags), label: tags.name, source: "osm" });
+      if (tags.building || tags["building:part"]) {
+        // Skip slivers that are OSM mapping noise rather than real structures.
+        if (isClosed(pts) && polygonArea(pts) < 4) continue;
+        const levels = parseFloat(tags["building:levels"] ?? "");
+        scene.buildings.push({
+          footprint: pts,
+          height: inferBuildingHeight(tags),
+          label: tags.name,
+          source: "osm",
+          color: inferBuildingColor(tags),
+          kind: tags.building || tags["building:part"],
+          levels: Number.isFinite(levels) ? levels : undefined,
+        });
+        scene.diagnostics.osmBuildings = (scene.diagnostics.osmBuildings ?? 0) + 1;
       } else if (tags.highway) {
-        scene.roads.push({ path: pts, width: roadWidth(tags.highway), kind: tags.highway, source: "osm" });
+        const { width, lanes } = resolvedRoadWidth(tags);
+        scene.roads.push({
+          path: pts,
+          width,
+          kind: tags.highway,
+          source: "osm",
+          lanes,
+          oneway: tags.oneway === "yes" || tags.oneway === "1",
+          surface: tags.surface,
+          name: tags.name,
+        });
+        scene.diagnostics.osmRoads = (scene.diagnostics.osmRoads ?? 0) + 1;
+      } else if (tags.barrier) {
+        scene.barriers = scene.barriers ?? [];
+        const h = tags.barrier === "wall" ? 2.4 : tags.barrier === "hedge" ? 1.4 : 1.8;
+        scene.barriers.push({ path: pts, kind: tags.barrier, height: h });
+      } else if (tags.natural === "water" || tags.waterway || tags.landuse === "reservoir") {
+        scene.water = scene.water ?? [];
+        if (isClosed(pts)) scene.water.push({ polygon: pts, kind: tags.natural || tags.waterway || "water" });
+      } else if (tags.landuse || tags.leisure === "park" || tags.leisure === "pitch" || tags.amenity === "parking") {
+        scene.landuse = scene.landuse ?? [];
+        if (isClosed(pts) && polygonArea(pts) > 20) {
+          scene.landuse.push({ polygon: pts, kind: tags.landuse || tags.leisure || tags.amenity || "area" });
+        }
       }
     }
     const pointLat = typeof el.lat === "number" ? el.lat : el.center?.lat;
@@ -286,6 +424,10 @@ function applyOsmElements(scene: RealWorldScene, elements: OverpassElement[], la
     const pos = project(pointLat, pointLng, lat, lng);
     if (tags.natural === "tree") scene.trees.push(pos);
     if (tags.highway === "street_lamp") scene.streetLights.push(pos);
+    if (tags.highway === "crossing" || tags.footway === "crossing") {
+      scene.crossings = scene.crossings ?? [];
+      scene.crossings.push(pos);
+    }
     if (tags.name || tags.amenity || tags.shop || tags.tourism || tags.office) {
       scene.landmarks.push({
         label: tags.name || tags.amenity || tags.shop || tags.tourism || tags.office || "Mapped place",
@@ -319,6 +461,11 @@ function applyGoogleRoads(scene: RealWorldScene, snapped: GoogleRoadPoint[], lat
 }
 
 function applyGooglePlaces(scene: RealWorldScene, places: GooglePlace[], lat: number, lng: number) {
+  // Real OSM footprints always win: a Google POI sitting inside/near an already
+  // mapped building must not spawn a second synthetic box on top of it.
+  const osmCentroids = scene.buildings
+    .filter((b) => b.source === "osm")
+    .map((b) => ({ c: polygonCentroid(b.footprint), r: Math.max(6, Math.sqrt(polygonArea(b.footprint))) }));
   for (const place of places) {
     const plat = place.location?.latitude;
     const plng = place.location?.longitude;
@@ -327,7 +474,11 @@ function applyGooglePlaces(scene: RealWorldScene, places: GooglePlace[], lat: nu
     const label = place.displayName?.text || place.formattedAddress || "Google mapped place";
     const kind = place.primaryType || place.types?.[0] || "place";
     scene.landmarks.push({ label, kind, position: [x, z], source: "google" });
-    if (!kind.includes("route")) {
+    const overlapsMapped = osmCentroids.some(({ c, r }) => Math.hypot(c[0] - x, c[1] - z) < r);
+    if (overlapsMapped) {
+      scene.diagnostics.dedupedGoogleBuildings = (scene.diagnostics.dedupedGoogleBuildings ?? 0) + 1;
+    }
+    if (!kind.includes("route") && !overlapsMapped) {
       const u = seededUnit(label);
       const w = 5 + u * 8;
       const d = 5 + seededUnit(`${label}:d`) * 8;
@@ -412,6 +563,10 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
     trees: [],
     landmarks: [],
     streetLights: [],
+    water: [],
+    landuse: [],
+    barriers: [],
+    crossings: [],
     staticMapUrl: null,
     address: null,
     radiusMeters: startRadius,
@@ -425,9 +580,17 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
       [out:json][timeout:25];
       (
         way["building"](around:${radius},${lat},${lng});
+        way["building:part"](around:${radius},${lat},${lng});
         way["highway"](around:${radius},${lat},${lng});
+        way["barrier"](around:${radius},${lat},${lng});
+        way["natural"="water"](around:${radius},${lat},${lng});
+        way["waterway"](around:${radius},${lat},${lng});
+        way["landuse"](around:${radius},${lat},${lng});
+        way["leisure"](around:${radius},${lat},${lng});
+        way["amenity"="parking"](around:${radius},${lat},${lng});
         node["natural"="tree"](around:${radius},${lat},${lng});
         node["highway"="street_lamp"](around:${radius},${lat},${lng});
+        node["highway"="crossing"](around:${radius},${lat},${lng});
         node["amenity"](around:${radius},${lat},${lng});
         node["shop"](around:${radius},${lat},${lng});
         node["tourism"](around:${radius},${lat},${lng});
@@ -444,7 +607,13 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
     scene.trees = [];
     scene.landmarks = [];
     scene.streetLights = [];
+    scene.water = [];
+    scene.landuse = [];
+    scene.barriers = [];
+    scene.crossings = [];
     scene.diagnostics.osmElements = json.elements?.length ?? 0;
+    scene.diagnostics.osmBuildings = 0;
+    scene.diagnostics.osmRoads = 0;
     applyOsmElements(scene, json.elements ?? [], lat, lng);
     if (scene.buildings.length + scene.roads.length + scene.landmarks.length > 0) {
       scene.status = "ok";

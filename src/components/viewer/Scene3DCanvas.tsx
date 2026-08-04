@@ -17,6 +17,24 @@ interface Scene3DCanvasProps {
 }
 
 /**
+ * Maps an FIR action label onto a body pose so the figure visibly performs the
+ * event (attack, flee, fall, aim, grab) instead of only translating.
+ */
+type ActionKind = "walk" | "run" | "attack" | "fall" | "aim" | "grab" | "flee" | "idle";
+
+function classifyAction(label: string | undefined): ActionKind {
+  const t = (label || "").toLowerCase();
+  if (/(fire|shoot|gun|goli|aim|pistol)/.test(t)) return "aim";
+  if (/(hit|attack|stab|strike|beat|assault|hamla|maar)/.test(t)) return "attack";
+  if (/(fall|collapse|injur|die|dead|gir|zakhmi)/.test(t)) return "fall";
+  if (/(snatch|grab|steal|rob|loot|cheen)/.test(t)) return "grab";
+  if (/(flee|escape|run away|farar|bhaag)/.test(t)) return "flee";
+  if (/(run|sprint|chase)/.test(t)) return "run";
+  if (/(walk|move|approach|arrive|enter|go)/.test(t)) return "walk";
+  return "idle";
+}
+
+/**
  * Fully-articulated humanoid rig built from primitives — head, neck, torso,
  * hips, upper/lower arms with hands, and upper/lower legs with feet. Limbs
  * swing on a sine wave keyed to movement speed so the figure "walks" between
@@ -30,6 +48,15 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
   const rightLegRef = useRef<THREE.Group>(null);
   const torsoRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((s) => s.currentEvent);
+
+  /** The action this entity is performing at the active timeline step. */
+  const action = useMemo<ActionKind>(() => {
+    const own = events.filter((e) => e.entity_id === entity.id);
+    const active = own
+      .filter((e) => (e.sequence_number ?? 0) <= currentEvent + 1)
+      .sort((a, b) => (b.sequence_number ?? 0) - (a.sequence_number ?? 0))[0];
+    return classifyAction(active?.action_label ?? active?.description ?? undefined);
+  }, [events, entity.id, currentEvent]);
 
   // Compute position per event from events data
   const positions = useMemo(() => {
@@ -60,7 +87,8 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
     if (!root) return;
 
     const prev = root.position.clone();
-    root.position.lerp(targetPos, 0.06);
+    const agility = action === "run" || action === "flee" ? 0.11 : action === "fall" ? 0.03 : 0.06;
+    root.position.lerp(targetPos, agility);
     const moved = root.position.distanceTo(prev);
     // EMA on step speed so animation blends in/out cleanly
     speedRef.current = THREE.MathUtils.lerp(speedRef.current, moved / Math.max(delta, 1 / 120), 0.15);
@@ -73,13 +101,53 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
 
     // Walk cycle — swing arms and legs proportional to travel speed.
     const t = performance.now() / 1000;
-    const swing = Math.min(speedRef.current * 1.6, 1);
-    const cycle = Math.sin(t * 6);
-    if (leftLegRef.current) leftLegRef.current.rotation.x = cycle * 0.75 * swing;
-    if (rightLegRef.current) rightLegRef.current.rotation.x = -cycle * 0.75 * swing;
-    if (leftArmRef.current) leftArmRef.current.rotation.x = -cycle * 0.6 * swing;
-    if (rightArmRef.current) rightArmRef.current.rotation.x = cycle * 0.6 * swing;
-    if (torsoRef.current) torsoRef.current.position.y = 0.9 + Math.abs(cycle) * 0.04 * swing;
+    const fast = action === "run" || action === "flee";
+    const swing = Math.min(speedRef.current * 1.6, 1) * (fast ? 1.35 : 1);
+    const cycle = Math.sin(t * (fast ? 9 : 6));
+    const idleBreath = Math.sin(t * 1.6) * 0.03;
+
+    // Base locomotion
+    let lLeg = cycle * 0.75 * swing;
+    let rLeg = -cycle * 0.75 * swing;
+    let lArm = -cycle * 0.6 * swing + idleBreath;
+    let rArm = cycle * 0.6 * swing - idleBreath;
+    let torsoY = 0.9 + Math.abs(cycle) * 0.04 * swing;
+    let torsoPitch = fast ? 0.22 : 0.02;
+    let rootTilt = 0;
+
+    // Action overlays — these dominate the pose when an event is active.
+    if (action === "attack") {
+      rArm = -2.0 + Math.sin(t * 9) * 0.55; // repeated overhead strike
+      lArm = 0.35;
+      torsoPitch = 0.25;
+    } else if (action === "aim") {
+      rArm = -1.55; // arm straight forward, weapon line
+      lArm = -1.35;
+      torsoPitch = 0.06;
+      lLeg *= 0.3;
+      rLeg *= 0.3;
+    } else if (action === "grab") {
+      rArm = -1.2 + Math.sin(t * 5) * 0.3;
+      lArm = -0.9;
+      torsoPitch = 0.3;
+    } else if (action === "fall") {
+      rootTilt = -Math.PI / 2.1; // collapsed on the ground
+      torsoY = 0.35;
+      lLeg = 0.4;
+      rLeg = 0.2;
+      lArm = 0.9;
+      rArm = 1.1;
+    }
+
+    if (leftLegRef.current) leftLegRef.current.rotation.x = lLeg;
+    if (rightLegRef.current) rightLegRef.current.rotation.x = rLeg;
+    if (leftArmRef.current) leftArmRef.current.rotation.x = lArm;
+    if (rightArmRef.current) rightArmRef.current.rotation.x = rArm;
+    if (torsoRef.current) {
+      torsoRef.current.position.y = torsoY;
+      torsoRef.current.rotation.x = THREE.MathUtils.lerp(torsoRef.current.rotation.x, torsoPitch, 0.15);
+    }
+    root.rotation.x = THREE.MathUtils.lerp(root.rotation.x, rootTilt, 0.1);
   });
 
   const roleTint = entity.entity_role === "suspect" ? "#ef4444"
@@ -184,6 +252,8 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
 
 function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
   const rootRef = useRef<THREE.Group>(null);
+  const wheelRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const brakeRef = useRef<THREE.MeshStandardMaterial>(null);
   const currentEvent = useSceneStore((s) => s.currentEvent);
 
   const positions = useMemo(() => {
@@ -203,13 +273,33 @@ function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneE
     return new THREE.Vector3(p[0], 0, p[2]);
   }, [currentEvent, positions]);
 
-  useFrame(() => {
+  const speedRef = useRef(0);
+
+  useFrame((_, delta) => {
     const root = rootRef.current;
     if (!root) return;
     const prev = root.position.clone();
     root.position.lerp(targetPos, 0.055);
     const dir = new THREE.Vector3().subVectors(root.position, prev);
+    const moved = dir.length();
     if (dir.lengthSq() > 0.00005) root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, Math.atan2(dir.x, dir.z), 0.12);
+
+    const speed = moved / Math.max(delta, 1 / 120);
+    const decelerating = speed < speedRef.current - 0.05;
+    speedRef.current = THREE.MathUtils.lerp(speedRef.current, speed, 0.2);
+
+    // Wheels spin with real travel distance; body leans under accel/brake.
+    for (const w of wheelRefs.current) {
+      if (w) w.rotation.x += moved / 0.23;
+    }
+    root.rotation.z = THREE.MathUtils.lerp(root.rotation.z, decelerating ? 0.03 : -0.02 * Math.min(speed, 1), 0.1);
+    if (brakeRef.current) {
+      brakeRef.current.emissiveIntensity = THREE.MathUtils.lerp(
+        brakeRef.current.emissiveIntensity,
+        decelerating || speedRef.current < 0.05 ? 2.6 : 0.35,
+        0.2,
+      );
+    }
   });
 
   const color = entity.color || "#C9A84C";
@@ -232,11 +322,22 @@ function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneE
         <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
       </mesh>
       {([[-0.78, 0.2, 0.54], [0.78, 0.2, 0.54], [-0.78, 0.2, -0.54], [0.78, 0.2, -0.54]] as [number, number, number][]).map((w, i) => (
-        <mesh key={i} position={w} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <mesh
+          key={i}
+          ref={(m) => { wheelRefs.current[i] = m; }}
+          position={w}
+          rotation={[Math.PI / 2, 0, 0]}
+          castShadow
+        >
           <cylinderGeometry args={[0.23, 0.23, 0.18, 20]} />
           <meshStandardMaterial color="#080808" roughness={0.86} />
         </mesh>
       ))}
+      {/* Brake bar — lights up when the vehicle decelerates or stops */}
+      <mesh position={[-1.18, 0.5, 0]}>
+        <boxGeometry args={[0.05, 0.09, 0.8]} />
+        <meshStandardMaterial ref={brakeRef} color="#5c0b0b" emissive="#ff2020" emissiveIntensity={0.35} />
+      </mesh>
       <mesh position={[1.2, 0.38, 0.33]}>
         <sphereGeometry args={[0.07, 10, 10]} />
         <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
@@ -289,6 +390,26 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
   );
 }
 
+/** Projected metre polygon → THREE.Shape usable as a flat ground patch. */
+function polygonToShape(polygon: Array<[number, number]>) {
+  const shape = new THREE.Shape();
+  polygon.forEach(([x, z], i) => {
+    if (i === 0) shape.moveTo(x, z);
+    else shape.lineTo(x, z);
+  });
+  return shape;
+}
+
+function landuseColor(kind: string) {
+  if (/park|grass|forest|meadow|recreation|pitch/.test(kind)) return "#3f6f3c";
+  if (/farm|orchard|allotment/.test(kind)) return "#7d7a3c";
+  if (/parking/.test(kind)) return "#3a3d42";
+  if (/industrial/.test(kind)) return "#5a5750";
+  if (/commercial|retail/.test(kind)) return "#6a6459";
+  if (/residential/.test(kind)) return "#5d5c52";
+  return "#4e6247";
+}
+
 /**
  * Real-world environment rebuilt from the FIR anchor. It merges OSM footprints,
  * Google roads/places, and coordinate-anchored inferred structures when public
@@ -309,13 +430,11 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       });
       // Extrude is on +Z of shape plane → rotate so height points up (+Y)
       geom.rotateX(-Math.PI / 2);
-      // Colour by height so the skyline reads well
+      // Prefer the real OSM building:colour/material tag; otherwise shade by height.
       const t = Math.min(1, b.height / 30);
-      const color = new THREE.Color().lerpColors(
-        new THREE.Color("#c8b28d"),
-        new THREE.Color("#6b7f96"),
-        t,
-      );
+      const color = b.color
+        ? new THREE.Color(b.color)
+        : new THREE.Color().lerpColors(new THREE.Color("#c8b28d"), new THREE.Color("#6b7f96"), t);
       return { i, geom, color, height: b.height };
     });
   }, [scene.buildings]);
@@ -337,9 +456,12 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       angle: number;
       width: number;
       color: string;
+      lanes?: number;
     }[] = [];
     for (const r of sorted) {
       const color = r.width >= 6 ? "#20242b" : r.width >= 3 ? "#2a2f37" : "#8a8578";
+      const paved = !r.surface || /asphalt|paved|concrete/.test(r.surface);
+      const surfaceColor = paved ? color : "#6b5a42";
       for (let i = 0; i < r.path.length - 1; i++) {
         const [x1, z1] = r.path[i];
         const [x2, z2] = r.path[i + 1];
@@ -353,7 +475,8 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
           length,
           angle: Math.atan2(dz, dx),
           width: r.width,
-          color,
+          color: surfaceColor,
+          lanes: r.lanes ?? (r.width >= 6 ? 2 : 1),
         });
       }
     }
@@ -368,17 +491,80 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         <meshStandardMaterial color="#496242" roughness={1} />
       </mesh>
 
-      {/* Roads */}
-      {roadSegments.map((s, i) => (
-        <mesh
-          key={`rd-${i}`}
-          receiveShadow
-          rotation={[-Math.PI / 2, 0, -s.angle]}
-          position={[s.x, 0.01, s.z]}
-        >
-          <planeGeometry args={[s.length, s.width]} />
-          <meshStandardMaterial color={s.color} roughness={0.95} />
+      {/* Land-use patches (parks, farmland, parking lots) under the roads */}
+      {(scene.landuse ?? []).map((a, i) => (
+        <mesh key={`lu-${i}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
+          <shapeGeometry args={[polygonToShape(a.polygon)]} />
+          <meshStandardMaterial color={landuseColor(a.kind)} roughness={1} />
         </mesh>
+      ))}
+
+      {/* Water bodies from OSM */}
+      {(scene.water ?? []).map((w, i) => (
+        <mesh key={`wa-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+          <shapeGeometry args={[polygonToShape(w.polygon)]} />
+          <meshStandardMaterial color="#2f6d8f" roughness={0.15} metalness={0.35} />
+        </mesh>
+      ))}
+
+      {/* Roads with sidewalks and lane markings */}
+      {roadSegments.map((s, i) => (
+        <group key={`rd-${i}`} rotation={[0, -s.angle, 0]} position={[s.x, 0, s.z]}>
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <planeGeometry args={[s.length, s.width]} />
+            <meshStandardMaterial color={s.color} roughness={0.95} />
+          </mesh>
+          {s.width >= 4 && (
+            <>
+              <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, s.width / 2 + 0.7]}>
+                <planeGeometry args={[s.length, 1.4]} />
+                <meshStandardMaterial color="#8d8b84" roughness={1} />
+              </mesh>
+              <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -s.width / 2 - 0.7]}>
+                <planeGeometry args={[s.length, 1.4]} />
+                <meshStandardMaterial color="#8d8b84" roughness={1} />
+              </mesh>
+            </>
+          )}
+          {(s.lanes ?? 1) >= 2 && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+              <planeGeometry args={[s.length * 0.72, 0.16]} />
+              <meshStandardMaterial color="#e8e2c8" roughness={0.7} />
+            </mesh>
+          )}
+        </group>
+      ))}
+
+      {/* Walls / fences */}
+      {(scene.barriers ?? []).flatMap((b, bi) =>
+        b.path.slice(0, -1).map(([x1, z1], i) => {
+          const [x2, z2] = b.path[i + 1];
+          const len = Math.hypot(x2 - x1, z2 - z1);
+          if (len < 0.6) return null;
+          return (
+            <mesh
+              key={`bar-${bi}-${i}`}
+              castShadow
+              position={[(x1 + x2) / 2, b.height / 2, (z1 + z2) / 2]}
+              rotation={[0, -Math.atan2(z2 - z1, x2 - x1), 0]}
+            >
+              <boxGeometry args={[len, b.height, 0.22]} />
+              <meshStandardMaterial color={b.kind === "hedge" ? "#3d6b3c" : "#a49b8b"} roughness={0.95} />
+            </mesh>
+          );
+        }),
+      )}
+
+      {/* Zebra crossings */}
+      {(scene.crossings ?? []).map(([x, z], i) => (
+        <group key={`cr-${i}`} position={[x, 0.035, z]}>
+          {[-1.5, -0.75, 0, 0.75, 1.5].map((o) => (
+            <mesh key={o} rotation={[-Math.PI / 2, 0, 0]} position={[o, 0, 0]}>
+              <planeGeometry args={[0.4, 3.2]} />
+              <meshStandardMaterial color="#efeade" roughness={0.8} />
+            </mesh>
+          ))}
+        </group>
       ))}
 
       {/* Extruded building footprints */}
