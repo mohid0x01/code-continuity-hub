@@ -410,13 +410,11 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       });
       // Extrude is on +Z of shape plane → rotate so height points up (+Y)
       geom.rotateX(-Math.PI / 2);
-      // Colour by height so the skyline reads well
+      // Prefer the real OSM building:colour/material tag; otherwise shade by height.
       const t = Math.min(1, b.height / 30);
-      const color = new THREE.Color().lerpColors(
-        new THREE.Color("#c8b28d"),
-        new THREE.Color("#6b7f96"),
-        t,
-      );
+      const color = b.color
+        ? new THREE.Color(b.color)
+        : new THREE.Color().lerpColors(new THREE.Color("#c8b28d"), new THREE.Color("#6b7f96"), t);
       return { i, geom, color, height: b.height };
     });
   }, [scene.buildings]);
@@ -438,9 +436,12 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       angle: number;
       width: number;
       color: string;
+      lanes?: number;
     }[] = [];
     for (const r of sorted) {
       const color = r.width >= 6 ? "#20242b" : r.width >= 3 ? "#2a2f37" : "#8a8578";
+      const paved = !r.surface || /asphalt|paved|concrete/.test(r.surface);
+      const surfaceColor = paved ? color : "#6b5a42";
       for (let i = 0; i < r.path.length - 1; i++) {
         const [x1, z1] = r.path[i];
         const [x2, z2] = r.path[i + 1];
@@ -454,7 +455,8 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
           length,
           angle: Math.atan2(dz, dx),
           width: r.width,
-          color,
+          color: surfaceColor,
+          lanes: r.lanes ?? (r.width >= 6 ? 2 : 1),
         });
       }
     }
