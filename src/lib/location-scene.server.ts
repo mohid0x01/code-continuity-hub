@@ -364,10 +364,45 @@ function applyOsmElements(scene: RealWorldScene, elements: OverpassElement[], la
     const tags = el.tags ?? {};
     if (el.type === "way" && el.geometry && el.geometry.length >= 2) {
       const pts: Array<[number, number]> = el.geometry.map((p) => project(p.lat, p.lon, lat, lng));
-      if (tags.building) {
-        scene.buildings.push({ footprint: pts, height: inferBuildingHeight(tags), label: tags.name, source: "osm" });
+      if (tags.building || tags["building:part"]) {
+        // Skip slivers that are OSM mapping noise rather than real structures.
+        if (isClosed(pts) && polygonArea(pts) < 4) continue;
+        const levels = parseFloat(tags["building:levels"] ?? "");
+        scene.buildings.push({
+          footprint: pts,
+          height: inferBuildingHeight(tags),
+          label: tags.name,
+          source: "osm",
+          color: inferBuildingColor(tags),
+          kind: tags.building || tags["building:part"],
+          levels: Number.isFinite(levels) ? levels : undefined,
+        });
+        scene.diagnostics.osmBuildings = (scene.diagnostics.osmBuildings ?? 0) + 1;
       } else if (tags.highway) {
-        scene.roads.push({ path: pts, width: roadWidth(tags.highway), kind: tags.highway, source: "osm" });
+        const { width, lanes } = resolvedRoadWidth(tags);
+        scene.roads.push({
+          path: pts,
+          width,
+          kind: tags.highway,
+          source: "osm",
+          lanes,
+          oneway: tags.oneway === "yes" || tags.oneway === "1",
+          surface: tags.surface,
+          name: tags.name,
+        });
+        scene.diagnostics.osmRoads = (scene.diagnostics.osmRoads ?? 0) + 1;
+      } else if (tags.barrier) {
+        scene.barriers = scene.barriers ?? [];
+        const h = tags.barrier === "wall" ? 2.4 : tags.barrier === "hedge" ? 1.4 : 1.8;
+        scene.barriers.push({ path: pts, kind: tags.barrier, height: h });
+      } else if (tags.natural === "water" || tags.waterway || tags.landuse === "reservoir") {
+        scene.water = scene.water ?? [];
+        if (isClosed(pts)) scene.water.push({ polygon: pts, kind: tags.natural || tags.waterway || "water" });
+      } else if (tags.landuse || tags.leisure === "park" || tags.leisure === "pitch" || tags.amenity === "parking") {
+        scene.landuse = scene.landuse ?? [];
+        if (isClosed(pts) && polygonArea(pts) > 20) {
+          scene.landuse.push({ polygon: pts, kind: tags.landuse || tags.leisure || tags.amenity || "area" });
+        }
       }
     }
     const pointLat = typeof el.lat === "number" ? el.lat : el.center?.lat;
@@ -376,6 +411,10 @@ function applyOsmElements(scene: RealWorldScene, elements: OverpassElement[], la
     const pos = project(pointLat, pointLng, lat, lng);
     if (tags.natural === "tree") scene.trees.push(pos);
     if (tags.highway === "street_lamp") scene.streetLights.push(pos);
+    if (tags.highway === "crossing" || tags.footway === "crossing") {
+      scene.crossings = scene.crossings ?? [];
+      scene.crossings.push(pos);
+    }
     if (tags.name || tags.amenity || tags.shop || tags.tourism || tags.office) {
       scene.landmarks.push({
         label: tags.name || tags.amenity || tags.shop || tags.tourism || tags.office || "Mapped place",
