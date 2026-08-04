@@ -310,6 +310,19 @@ async function fetchReverseAddress(lat: number, lng: number) {
   return json?.results?.[0]?.formatted_address ?? null;
 }
 
+/**
+ * Precision resolver for the location picker: turns an exact lat/lng into the
+ * nearest real street address plus a Google static satellite thumbnail so the
+ * officer visually confirms the pin before the FIR is saved.
+ */
+export async function resolveExactPoint(lat: number, lng: number) {
+  const [address, staticMapUrl] = await Promise.all([
+    fetchReverseAddress(lat, lng).catch(() => null),
+    fetchStaticMap(lat, lng, 250).catch(() => null),
+  ]);
+  return { lat, lng, address, staticMapUrl };
+}
+
 async function fetchGooglePlaces(lat: number, lng: number, radius: number) {
   const queries = [
     `buildings shops schools mosques hospitals police near ${lat},${lng}`,
