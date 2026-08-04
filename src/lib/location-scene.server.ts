@@ -24,13 +24,13 @@ export interface RealWorldScene {
   landmarks: { label: string; kind: string; position: [number, number]; source: "osm" | "google" }[];
   streetLights: Array<[number, number]>;
   /** Rivers, canals, ponds as closed polygons (rendered as water planes). */
-  water: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  water?: Array<{ polygon: Array<[number, number]>; kind: string }>;
   /** Parks, farmland, residential blocks etc. — flat coloured ground patches. */
-  landuse: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  landuse?: Array<{ polygon: Array<[number, number]>; kind: string }>;
   /** Walls, fences, hedges as low extruded lines. */
-  barriers: Array<{ path: Array<[number, number]>; kind: string; height: number }>;
+  barriers?: Array<{ path: Array<[number, number]>; kind: string; height: number }>;
   /** Pedestrian crossings — striped zebra decals on roads. */
-  crossings: Array<[number, number]>;
+  crossings?: Array<[number, number]>;
   staticMapUrl: string | null;
   address: string | null;
   radiusMeters: number;
