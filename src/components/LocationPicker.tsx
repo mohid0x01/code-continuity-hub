@@ -402,17 +402,69 @@ export function LocationPicker({
         </div>
       </div>
 
+      {/* EXACT SPOT */}
+      <div className="relative">
+        <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">
+          Exact Spot / Street / Landmark
+        </label>
+        <div className="relative mt-2">
+          <input
+            type="text"
+            value={spotInput}
+            onChange={(e) => setSpotInput(e.target.value)}
+            placeholder={selectedCity ? "e.g. Shahi Bazaar chowk, Main Kutchery Road" : "Pick a city first"}
+            disabled={!selectedCity}
+            className="glass-input w-full rounded-[6px] px-4 py-3 pr-10 text-sm placeholder:text-text-muted disabled:opacity-50"
+          />
+          <Crosshair className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
+          {spotSuggestions.length > 0 && (
+            <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-[6px] border border-border-accent bg-card shadow-2xl">
+              {spotSuggestions.map((s) => (
+                <li key={s.placeId}>
+                  <button
+                    type="button"
+                    onClick={() => pickSpot(s)}
+                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                  >
+                    <Crosshair className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold" />
+                    <span>
+                      <span className="text-text-primary">{s.primary}</span>
+                      <span className="ml-1 text-xs text-text-muted">{s.secondary}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {picked && (
-        <div className="rounded-[6px] border border-gold/30 bg-gold/5 px-4 py-3">
+        <div className="space-y-3 rounded-[6px] border border-gold/30 bg-gold/5 px-4 py-3">
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
             <div className="text-[12px] text-text-secondary">
               <div className="font-semibold text-text-primary">{picked.formattedAddress}</div>
               <div className="mt-0.5 font-mono text-[10px] text-text-muted">
-                {picked.latitude.toFixed(5)}, {picked.longitude.toFixed(5)}
+                {picked.latitude.toFixed(6)}, {picked.longitude.toFixed(6)}
+                <span className="ml-2 uppercase tracking-wider text-gold">
+                  {picked.precision ?? "area"} precision
+                </span>
+              </div>
+              <div className="mt-1 text-[10px] text-text-muted">
+                Drag the pin or tap the map to fine-tune the exact incident point.
               </div>
             </div>
           </div>
+          <div ref={mapRef} className="h-52 w-full overflow-hidden rounded-[6px] border border-border-subtle" />
+          {satUrl && (
+            <img
+              src={satUrl}
+              alt="Satellite preview of the selected incident location"
+              className="h-32 w-full rounded-[6px] border border-border-subtle object-cover"
+              loading="lazy"
+            />
+          )}
         </div>
       )}
     </div>
