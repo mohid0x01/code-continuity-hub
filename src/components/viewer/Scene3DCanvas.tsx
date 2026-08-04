@@ -390,6 +390,26 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
   );
 }
 
+/** Projected metre polygon → THREE.Shape usable as a flat ground patch. */
+function polygonToShape(polygon: Array<[number, number]>) {
+  const shape = new THREE.Shape();
+  polygon.forEach(([x, z], i) => {
+    if (i === 0) shape.moveTo(x, z);
+    else shape.lineTo(x, z);
+  });
+  return shape;
+}
+
+function landuseColor(kind: string) {
+  if (/park|grass|forest|meadow|recreation|pitch/.test(kind)) return "#3f6f3c";
+  if (/farm|orchard|allotment/.test(kind)) return "#7d7a3c";
+  if (/parking/.test(kind)) return "#3a3d42";
+  if (/industrial/.test(kind)) return "#5a5750";
+  if (/commercial|retail/.test(kind)) return "#6a6459";
+  if (/residential/.test(kind)) return "#5d5c52";
+  return "#4e6247";
+}
+
 /**
  * Real-world environment rebuilt from the FIR anchor. It merges OSM footprints,
  * Google roads/places, and coordinate-anchored inferred structures when public
