@@ -252,6 +252,8 @@ function HumanFigure({ entity, events }: { entity: SceneEntity; events: SceneEve
 
 function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
   const rootRef = useRef<THREE.Group>(null);
+  const wheelRefs = useRef<Array<THREE.Mesh | null>>([]);
+  const brakeRef = useRef<THREE.MeshStandardMaterial>(null);
   const currentEvent = useSceneStore((s) => s.currentEvent);
 
   const positions = useMemo(() => {
@@ -271,13 +273,33 @@ function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneE
     return new THREE.Vector3(p[0], 0, p[2]);
   }, [currentEvent, positions]);
 
-  useFrame(() => {
+  const speedRef = useRef(0);
+
+  useFrame((_, delta) => {
     const root = rootRef.current;
     if (!root) return;
     const prev = root.position.clone();
     root.position.lerp(targetPos, 0.055);
     const dir = new THREE.Vector3().subVectors(root.position, prev);
+    const moved = dir.length();
     if (dir.lengthSq() > 0.00005) root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, Math.atan2(dir.x, dir.z), 0.12);
+
+    const speed = moved / Math.max(delta, 1 / 120);
+    const decelerating = speed < speedRef.current - 0.05;
+    speedRef.current = THREE.MathUtils.lerp(speedRef.current, speed, 0.2);
+
+    // Wheels spin with real travel distance; body leans under accel/brake.
+    for (const w of wheelRefs.current) {
+      if (w) w.rotation.x += moved / 0.23;
+    }
+    root.rotation.z = THREE.MathUtils.lerp(root.rotation.z, decelerating ? 0.03 : -0.02 * Math.min(speed, 1), 0.1);
+    if (brakeRef.current) {
+      brakeRef.current.emissiveIntensity = THREE.MathUtils.lerp(
+        brakeRef.current.emissiveIntensity,
+        decelerating || speedRef.current < 0.05 ? 2.6 : 0.35,
+        0.2,
+      );
+    }
   });
 
   const color = entity.color || "#C9A84C";
@@ -300,11 +322,22 @@ function VehicleFigure({ entity, events }: { entity: SceneEntity; events: SceneE
         <meshStandardMaterial color="#07111f" metalness={0.9} roughness={0.12} />
       </mesh>
       {([[-0.78, 0.2, 0.54], [0.78, 0.2, 0.54], [-0.78, 0.2, -0.54], [0.78, 0.2, -0.54]] as [number, number, number][]).map((w, i) => (
-        <mesh key={i} position={w} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <mesh
+          key={i}
+          ref={(m) => { wheelRefs.current[i] = m; }}
+          position={w}
+          rotation={[Math.PI / 2, 0, 0]}
+          castShadow
+        >
           <cylinderGeometry args={[0.23, 0.23, 0.18, 20]} />
           <meshStandardMaterial color="#080808" roughness={0.86} />
         </mesh>
       ))}
+      {/* Brake bar — lights up when the vehicle decelerates or stops */}
+      <mesh position={[-1.18, 0.5, 0]}>
+        <boxGeometry args={[0.05, 0.09, 0.8]} />
+        <meshStandardMaterial ref={brakeRef} color="#5c0b0b" emissive="#ff2020" emissiveIntensity={0.35} />
+      </mesh>
       <mesh position={[1.2, 0.38, 0.33]}>
         <sphereGeometry args={[0.07, 10, 10]} />
         <meshStandardMaterial color="#fff8d0" emissive="#fff2a8" emissiveIntensity={1.4} />
