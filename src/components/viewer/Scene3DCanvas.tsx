@@ -471,17 +471,80 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         <meshStandardMaterial color="#496242" roughness={1} />
       </mesh>
 
-      {/* Roads */}
-      {roadSegments.map((s, i) => (
-        <mesh
-          key={`rd-${i}`}
-          receiveShadow
-          rotation={[-Math.PI / 2, 0, -s.angle]}
-          position={[s.x, 0.01, s.z]}
-        >
-          <planeGeometry args={[s.length, s.width]} />
-          <meshStandardMaterial color={s.color} roughness={0.95} />
+      {/* Land-use patches (parks, farmland, parking lots) under the roads */}
+      {(scene.landuse ?? []).map((a, i) => (
+        <mesh key={`lu-${i}`} receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
+          <shapeGeometry args={[polygonToShape(a.polygon)]} />
+          <meshStandardMaterial color={landuseColor(a.kind)} roughness={1} />
         </mesh>
+      ))}
+
+      {/* Water bodies from OSM */}
+      {(scene.water ?? []).map((w, i) => (
+        <mesh key={`wa-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+          <shapeGeometry args={[polygonToShape(w.polygon)]} />
+          <meshStandardMaterial color="#2f6d8f" roughness={0.15} metalness={0.35} />
+        </mesh>
+      ))}
+
+      {/* Roads with sidewalks and lane markings */}
+      {roadSegments.map((s, i) => (
+        <group key={`rd-${i}`} rotation={[0, -s.angle, 0]} position={[s.x, 0, s.z]}>
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <planeGeometry args={[s.length, s.width]} />
+            <meshStandardMaterial color={s.color} roughness={0.95} />
+          </mesh>
+          {s.width >= 4 && (
+            <>
+              <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, s.width / 2 + 0.7]}>
+                <planeGeometry args={[s.length, 1.4]} />
+                <meshStandardMaterial color="#8d8b84" roughness={1} />
+              </mesh>
+              <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -s.width / 2 - 0.7]}>
+                <planeGeometry args={[s.length, 1.4]} />
+                <meshStandardMaterial color="#8d8b84" roughness={1} />
+              </mesh>
+            </>
+          )}
+          {(s.lanes ?? 1) >= 2 && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+              <planeGeometry args={[s.length * 0.72, 0.16]} />
+              <meshStandardMaterial color="#e8e2c8" roughness={0.7} />
+            </mesh>
+          )}
+        </group>
+      ))}
+
+      {/* Walls / fences */}
+      {(scene.barriers ?? []).flatMap((b, bi) =>
+        b.path.slice(0, -1).map(([x1, z1], i) => {
+          const [x2, z2] = b.path[i + 1];
+          const len = Math.hypot(x2 - x1, z2 - z1);
+          if (len < 0.6) return null;
+          return (
+            <mesh
+              key={`bar-${bi}-${i}`}
+              castShadow
+              position={[(x1 + x2) / 2, b.height / 2, (z1 + z2) / 2]}
+              rotation={[0, -Math.atan2(z2 - z1, x2 - x1), 0]}
+            >
+              <boxGeometry args={[len, b.height, 0.22]} />
+              <meshStandardMaterial color={b.kind === "hedge" ? "#3d6b3c" : "#a49b8b"} roughness={0.95} />
+            </mesh>
+          );
+        }),
+      )}
+
+      {/* Zebra crossings */}
+      {(scene.crossings ?? []).map(([x, z], i) => (
+        <group key={`cr-${i}`} position={[x, 0.035, z]}>
+          {[-1.5, -0.75, 0, 0.75, 1.5].map((o) => (
+            <mesh key={o} rotation={[-Math.PI / 2, 0, 0]} position={[o, 0, 0]}>
+              <planeGeometry args={[0.4, 3.2]} />
+              <meshStandardMaterial color="#efeade" roughness={0.8} />
+            </mesh>
+          ))}
+        </group>
       ))}
 
       {/* Extruded building footprints */}
