@@ -448,6 +448,11 @@ function applyGoogleRoads(scene: RealWorldScene, snapped: GoogleRoadPoint[], lat
 }
 
 function applyGooglePlaces(scene: RealWorldScene, places: GooglePlace[], lat: number, lng: number) {
+  // Real OSM footprints always win: a Google POI sitting inside/near an already
+  // mapped building must not spawn a second synthetic box on top of it.
+  const osmCentroids = scene.buildings
+    .filter((b) => b.source === "osm")
+    .map((b) => ({ c: polygonCentroid(b.footprint), r: Math.max(6, Math.sqrt(polygonArea(b.footprint))) }));
   for (const place of places) {
     const plat = place.location?.latitude;
     const plng = place.location?.longitude;
@@ -456,7 +461,11 @@ function applyGooglePlaces(scene: RealWorldScene, places: GooglePlace[], lat: nu
     const label = place.displayName?.text || place.formattedAddress || "Google mapped place";
     const kind = place.primaryType || place.types?.[0] || "place";
     scene.landmarks.push({ label, kind, position: [x, z], source: "google" });
-    if (!kind.includes("route")) {
+    const overlapsMapped = osmCentroids.some(({ c, r }) => Math.hypot(c[0] - x, c[1] - z) < r);
+    if (overlapsMapped) {
+      scene.diagnostics.dedupedGoogleBuildings = (scene.diagnostics.dedupedGoogleBuildings ?? 0) + 1;
+    }
+    if (!kind.includes("route") && !overlapsMapped) {
       const u = seededUnit(label);
       const w = 5 + u * 8;
       const d = 5 + seededUnit(`${label}:d`) * 8;
