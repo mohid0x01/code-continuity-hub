@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { MapPin, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MapPin, Loader2, Crosshair } from "lucide-react";
+import { resolvePickedPoint } from "@/lib/location-scene.functions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -14,6 +15,8 @@ export type PickedLocation = {
   formattedAddress: string;
   latitude: number;
   longitude: number;
+  /** How precise the saved coordinate is — drives 3D scene radius selection. */
+  precision?: "city" | "area" | "exact";
 };
 
 type Suggestion = { placeId: string; primary: string; secondary: string };
@@ -44,7 +47,13 @@ export function LocationPicker({
   } | null>(null);
   const [picked, setPicked] = useState<PickedLocation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [spotInput, setSpotInput] = useState("");
+  const [spotSuggestions, setSpotSuggestions] = useState<Suggestion[]>([]);
+  const [satUrl, setSatUrl] = useState<string | null>(null);
   const sessionRef = useRef<any>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapObjRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
 
   // Wait for Google Maps Places lib
   useEffect(() => {
@@ -131,6 +140,106 @@ export function LocationPicker({
     return () => clearTimeout(handle);
   }, [areaInput, selectedCity, ready]);
 
+  // Debounced street/landmark autocomplete — the "exact spot" tier.
+  useEffect(() => {
+    if (!ready || !selectedCity || !spotInput || spotInput.length < 2) {
+      setSpotSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const center = picked
+          ? { lat: picked.latitude, lng: picked.longitude }
+          : { lat: selectedCity.lat, lng: selectedCity.lng };
+        const { suggestions } =
+          await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+            input: spotInput,
+            includedRegionCodes: ["PK"],
+            locationBias: { center, radius: 12000 },
+            sessionToken: sessionRef.current,
+          });
+        setSpotSuggestions(
+          (suggestions ?? []).slice(0, 6).map((s: any) => ({
+            placeId: s.placePrediction?.placeId ?? "",
+            primary: s.placePrediction?.mainText?.text ?? "",
+            secondary: s.placePrediction?.secondaryText?.text ?? "",
+          })),
+        );
+      } catch (err) {
+        console.error("Spot autocomplete", err);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [spotInput, selectedCity, picked, ready]);
+
+  /** Commits an exact coordinate: reverse-geocodes it server-side and pins the map. */
+  const commitPoint = useCallback(
+    async (lat: number, lng: number, label: string, precision: PickedLocation["precision"]) => {
+      const base: PickedLocation = {
+        city: selectedCity?.name ?? "",
+        area: areaInput || label,
+        formattedAddress: label,
+        latitude: lat,
+        longitude: lng,
+        precision,
+      };
+      setPicked(base);
+      onChange(base);
+      try {
+        const resolved = await resolvePickedPoint({ data: { lat, lng } });
+        setSatUrl(resolved.staticMapUrl ?? null);
+        if (resolved.address) {
+          const next = { ...base, formattedAddress: resolved.address };
+          setPicked(next);
+          onChange(next);
+        }
+      } catch (err) {
+        console.warn("Reverse geocode failed", err);
+      }
+    },
+    [areaInput, onChange, selectedCity],
+  );
+
+  // Interactive confirmation map with a draggable pin (exact lat/lng control).
+  useEffect(() => {
+    if (!ready || !picked || !mapRef.current) return;
+    const center = { lat: picked.latitude, lng: picked.longitude };
+    const run = async () => {
+      await window.google.maps.importLibrary("maps");
+      await window.google.maps.importLibrary("marker");
+      if (!mapObjRef.current) {
+        mapObjRef.current = new window.google.maps.Map(mapRef.current, {
+          center,
+          zoom: 17,
+          mapTypeId: "hybrid",
+          disableDefaultUI: true,
+          zoomControl: true,
+        });
+        markerRef.current = new window.google.maps.Marker({
+          map: mapObjRef.current,
+          position: center,
+          draggable: true,
+        });
+        markerRef.current.addListener("dragend", (e: any) => {
+          const lat = e.latLng.lat();
+          const lng = e.latLng.lng();
+          void commitPoint(lat, lng, "Pin adjusted by officer", "exact");
+        });
+        mapObjRef.current.addListener("click", (e: any) => {
+          const lat = e.latLng.lat();
+          const lng = e.latLng.lng();
+          markerRef.current.setPosition({ lat, lng });
+          void commitPoint(lat, lng, "Pin adjusted by officer", "exact");
+        });
+      } else {
+        mapObjRef.current.setCenter(center);
+        markerRef.current?.setPosition(center);
+      }
+    };
+    void run();
+    // Only re-centre when the coordinate itself changes.
+  }, [ready, picked?.latitude, picked?.longitude, commitPoint, picked]);
+
   const pickCity = async (s: Suggestion) => {
     setLoading(true);
     try {
@@ -172,6 +281,7 @@ export function LocationPicker({
         formattedAddress: place.formattedAddress ?? `${s.primary}, ${selectedCity.name}`,
         latitude: lat,
         longitude: lng,
+        precision: "area",
       };
       setAreaInput(s.primary);
       setAreaSuggestions([]);
@@ -179,6 +289,24 @@ export function LocationPicker({
       onChange(next);
     } catch (err) {
       console.error("Fetch area details", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickSpot = async (s: Suggestion) => {
+    setLoading(true);
+    try {
+      const Place = window.google.maps.places.Place;
+      const place = new Place({ id: s.placeId });
+      await place.fetchFields({ fields: ["formattedAddress", "location", "displayName"] });
+      const lat = place.location?.lat?.() ?? 0;
+      const lng = place.location?.lng?.() ?? 0;
+      setSpotInput(s.primary);
+      setSpotSuggestions([]);
+      await commitPoint(lat, lng, place.formattedAddress ?? s.primary, "exact");
+    } catch (err) {
+      console.error("Fetch spot details", err);
     } finally {
       setLoading(false);
     }
