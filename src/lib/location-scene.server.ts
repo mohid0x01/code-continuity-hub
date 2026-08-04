@@ -1,10 +1,36 @@
 export interface RealWorldScene {
   anchor: { lat: number; lng: number };
-  buildings: { footprint: Array<[number, number]>; height: number; label?: string; source?: "osm" | "google" | "inferred" }[];
-  roads: { path: Array<[number, number]>; width: number; kind: string; source?: "osm" | "google" | "inferred" }[];
+  buildings: {
+    footprint: Array<[number, number]>;
+    height: number;
+    label?: string;
+    source?: "osm" | "google" | "inferred";
+    /** Roof/wall colour hints resolved from OSM tags (building:colour, material). */
+    color?: string;
+    kind?: string;
+    levels?: number;
+  }[];
+  roads: {
+    path: Array<[number, number]>;
+    width: number;
+    kind: string;
+    source?: "osm" | "google" | "inferred";
+    lanes?: number;
+    oneway?: boolean;
+    surface?: string;
+    name?: string;
+  }[];
   trees: Array<[number, number]>;
   landmarks: { label: string; kind: string; position: [number, number]; source: "osm" | "google" }[];
   streetLights: Array<[number, number]>;
+  /** Rivers, canals, ponds as closed polygons (rendered as water planes). */
+  water: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  /** Parks, farmland, residential blocks etc. — flat coloured ground patches. */
+  landuse: Array<{ polygon: Array<[number, number]>; kind: string }>;
+  /** Walls, fences, hedges as low extruded lines. */
+  barriers: Array<{ path: Array<[number, number]>; kind: string; height: number }>;
+  /** Pedestrian crossings — striped zebra decals on roads. */
+  crossings: Array<[number, number]>;
   staticMapUrl: string | null;
   address: string | null;
   radiusMeters: number;
@@ -16,6 +42,9 @@ export interface RealWorldScene {
     googleRoadPoints: number;
     synthesizedBuildings: number;
     synthesizedRoads: number;
+    osmBuildings?: number;
+    osmRoads?: number;
+    dedupedGoogleBuildings?: number;
   };
 }
 
