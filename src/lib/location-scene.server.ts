@@ -613,7 +613,7 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
         node["tourism"](around:${radius},${lat},${lng});
         node["office"](around:${radius},${lat},${lng});
       );
-      out geom tags center;
+      out geom;
     `;
     const json = await overpassQuery(query);
     if (!json) continue;
