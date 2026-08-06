@@ -315,9 +315,31 @@ async function fetchStaticMap(lat: number, lng: number, radius: number) {
     `&zoom=${zoom}&size=640x640&scale=2&maptype=hybrid` +
     `&markers=color:red%7C${lat},${lng}`;
   const res = await googleGateway(path);
-  if (!res) return null;
+  if (!res) return await fetchOsmStaticMap(lat, lng, zoom);
   const buf = await res.arrayBuffer();
   return `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+}
+
+/**
+ * Static-map fallback stitched from public OSM raster tiles. Used whenever the
+ * Google Static Maps API is unavailable for the configured key, so the officer
+ * always sees a real map preview of the incident point.
+ */
+async function fetchOsmStaticMap(lat: number, lng: number, zoom: number): Promise<string | null> {
+  try {
+    const n = 2 ** zoom;
+    const x = Math.floor(((lng + 180) / 360) * n);
+    const latRad = (lat * Math.PI) / 180;
+    const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
+    const res = await fetch(`https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`, {
+      headers: { "User-Agent": OVERPASS_UA },
+    });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchReverseAddress(lat: number, lng: number) {
