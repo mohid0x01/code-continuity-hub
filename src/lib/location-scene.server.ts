@@ -51,8 +51,17 @@ export interface RealWorldScene {
 const OVERPASS_MIRRORS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.osm.ch/api/interpreter",
   "https://overpass.openstreetmap.ru/api/interpreter",
 ];
+
+/**
+ * Overpass rejects requests without a descriptive User-Agent with HTTP 406
+ * ("Not Acceptable"). Missing this header was silently forcing every scene to
+ * the synthetic fallback, so it is mandatory on every mirror call.
+ */
+const OVERPASS_UA = "SceneIQ/1.0 (crime-scene reconstruction; +https://scene-iq.teamcyberops.xyz)";
 
 // ---------------------------------------------------------------------------
 // Deterministic cache + retry
@@ -254,14 +263,22 @@ function rectangleFootprint(x: number, z: number, width: number, depth: number, 
 
 async function overpassQuery(body: string): Promise<{ elements?: OverpassElement[] } | null> {
   for (const url of OVERPASS_MIRRORS) {
-    const json = await withRetry(`overpass ${url}`, 2, async () => {
+    const json = await withRetry(`overpass ${url}`, 3, async () => {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+          "User-Agent": OVERPASS_UA,
+        },
         body: "data=" + encodeURIComponent(body),
       });
       if (!res.ok) throw new Error(`mirror returned ${res.status}`);
-      return (await res.json()) as { elements?: OverpassElement[] };
+      const parsed = (await res.json()) as { elements?: OverpassElement[] };
+      // An empty element list is a valid answer but not a useful one — let the
+      // retry/mirror loop try elsewhere before we accept "no map data".
+      if (!parsed.elements || parsed.elements.length === 0) return null;
+      return parsed;
     });
     if (json) return json;
   }
