@@ -13,6 +13,16 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/dashboard/processing")({
+  head: () => ({
+    meta: [
+      { title: "Pipeline Processing — SCENEIQ" },
+      { name: "description", content: "Live progress of the SCENEIQ AI pipeline stages for a submitted FIR." },
+      { property: "og:title", content: "Pipeline Processing — SCENEIQ" },
+      { property: "og:description", content: "Live progress of the SCENEIQ AI pipeline stages for a submitted FIR." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   validateSearch: (search) => searchSchema.parse(search),
   component: ProcessingPage,
 });

@@ -5,6 +5,16 @@ import { listAuditLogs, type AuditLogRow } from "@/lib/audit.functions";
 import { Shield, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/audit")({
+  head: () => ({
+    meta: [
+      { title: "Audit Log — SCENEIQ" },
+      { name: "description", content: "Immutable audit trail of every SuperAdmin action and visitor event." },
+      { property: "og:title", content: "Audit Log — SCENEIQ" },
+      { property: "og:description", content: "Immutable audit trail of every SuperAdmin action and visitor event." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: AuditPage,
 });
 

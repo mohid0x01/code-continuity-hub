@@ -6,6 +6,16 @@ import { GripVertical, Eye, EyeOff, Save, Activity, TrendingUp, Zap } from "luci
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/settings")({
+  head: () => ({
+    meta: [
+      { title: "Developer Settings — SCENEIQ" },
+      { name: "description", content: "Configure the AI model chain, API keys, rate limits and usage analytics." },
+      { property: "og:title", content: "Developer Settings — SCENEIQ" },
+      { property: "og:description", content: "Configure the AI model chain, API keys, rate limits and usage analytics." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: SettingsPage,
 });
 

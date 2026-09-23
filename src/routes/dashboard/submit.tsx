@@ -24,6 +24,16 @@ const templates = Object.entries(templateModules)
   .sort((a, b) => a.title.localeCompare(b.title));
 
 export const Route = createFileRoute("/dashboard/submit")({
+  head: () => ({
+    meta: [
+      { title: "Submit New FIR — SCENEIQ" },
+      { name: "description", content: "File an FIR narrative and pick the exact incident location for 3D reconstruction." },
+      { property: "og:title", content: "Submit New FIR — SCENEIQ" },
+      { property: "og:description", content: "File an FIR narrative and pick the exact incident location for 3D reconstruction." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: SubmitFIR,
 });
 

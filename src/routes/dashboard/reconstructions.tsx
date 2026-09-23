@@ -5,6 +5,16 @@ import { ArrowRight, Boxes } from "lucide-react";
 import { useJobsRealtime } from "@/hooks/useJobRealtime";
 
 export const Route = createFileRoute("/dashboard/reconstructions")({
+  head: () => ({
+    meta: [
+      { title: "My Reconstructions — SCENEIQ" },
+      { name: "description", content: "All completed 3D crime-scene reconstructions ready for review and export." },
+      { property: "og:title", content: "My Reconstructions — SCENEIQ" },
+      { property: "og:description", content: "All completed 3D crime-scene reconstructions ready for review and export." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: MyReconstructions,
 });
 

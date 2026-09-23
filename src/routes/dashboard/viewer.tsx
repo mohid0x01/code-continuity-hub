@@ -52,6 +52,16 @@ import { geocodeFirText } from "@/lib/geocode";
 const searchSchema = z.object({ jobId: z.string().optional(), debug: z.coerce.boolean().optional() });
 
 export const Route = createFileRoute("/dashboard/viewer")({
+  head: () => ({
+    meta: [
+      { title: "Scene Reconstruction Viewer — SCENEIQ" },
+      { name: "description", content: "Explore the 3D reconstruction, AI video, evidence and source map of an FIR case." },
+      { property: "og:title", content: "Scene Reconstruction Viewer — SCENEIQ" },
+      { property: "og:description", content: "Explore the 3D reconstruction, AI video, evidence and source map of an FIR case." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   // Never throw on odd query strings — a parse failure here renders the global
   // "This page didn't load" shell instead of the viewer.
   validateSearch: (search) => {
