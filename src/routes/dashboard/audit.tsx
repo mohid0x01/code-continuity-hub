@@ -11,13 +11,23 @@ export const Route = createFileRoute("/dashboard/audit")({
 function AuditPage() {
   const [rows, setRows] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const fn = useServerFn(listAuditLogs);
 
   const load = async () => {
     setLoading(true);
-    try { setRows(await fn({})); } finally { setLoading(false); }
+    setError(null);
+    try {
+      setRows(await fn({}));
+    } catch (err) {
+      // A failed fetch must not bubble into an unhandled rejection / blank page.
+      setError(err instanceof Error ? err.message : "Could not load the audit trail.");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
 
   return (
     <div>
