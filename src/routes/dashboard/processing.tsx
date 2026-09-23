@@ -23,7 +23,11 @@ export const Route = createFileRoute("/dashboard/processing")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  validateSearch: (search) => searchSchema.parse(search),
+  // A bad query string must not blow up the page shell.
+  validateSearch: (search) => {
+    const parsed = searchSchema.safeParse(search);
+    return parsed.success ? parsed.data : {};
+  },
   component: ProcessingPage,
 });
 
