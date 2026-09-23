@@ -44,6 +44,12 @@ function AuditPage() {
       </div>
       <div className="gold-divider mt-2" style={{ width: "60px" }} />
 
+      {error && (
+        <div className="mt-6 rounded-[6px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="mt-6 overflow-hidden rounded-[6px] border border-border-subtle bg-card">
         <table className="w-full text-sm">
           <thead>
