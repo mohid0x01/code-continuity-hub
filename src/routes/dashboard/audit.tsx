@@ -5,19 +5,39 @@ import { listAuditLogs, type AuditLogRow } from "@/lib/audit.functions";
 import { Shield, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/audit")({
+  head: () => ({
+    meta: [
+      { title: "Audit Log — SCENEIQ" },
+      { name: "description", content: "Immutable audit trail of every SuperAdmin action and visitor event." },
+      { property: "og:title", content: "Audit Log — SCENEIQ" },
+      { property: "og:description", content: "Immutable audit trail of every SuperAdmin action and visitor event." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: AuditPage,
 });
 
 function AuditPage() {
   const [rows, setRows] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const fn = useServerFn(listAuditLogs);
 
   const load = async () => {
     setLoading(true);
-    try { setRows(await fn({})); } finally { setLoading(false); }
+    setError(null);
+    try {
+      setRows(await fn({}));
+    } catch (err) {
+      // A failed fetch must not bubble into an unhandled rejection / blank page.
+      setError(err instanceof Error ? err.message : "Could not load the audit trail.");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
 
   return (
     <div>
@@ -33,6 +53,12 @@ function AuditPage() {
         </button>
       </div>
       <div className="gold-divider mt-2" style={{ width: "60px" }} />
+
+      {error && (
+        <div className="mt-6 rounded-[6px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       <div className="mt-6 overflow-hidden rounded-[6px] border border-border-subtle bg-card">
         <table className="w-full text-sm">

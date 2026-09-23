@@ -5,6 +5,16 @@ import { Search, ArrowRight, FileX } from "lucide-react";
 import { useJobsRealtime } from "@/hooks/useJobRealtime";
 
 export const Route = createFileRoute("/dashboard/archive")({
+  head: () => ({
+    meta: [
+      { title: "Case Archive — SCENEIQ" },
+      { name: "description", content: "Search and filter every FIR case processed by the SCENEIQ reconstruction pipeline." },
+      { property: "og:title", content: "Case Archive — SCENEIQ" },
+      { property: "og:description", content: "Search and filter every FIR case processed by the SCENEIQ reconstruction pipeline." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: CaseArchive,
 });
 

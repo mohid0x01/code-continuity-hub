@@ -12,6 +12,16 @@ import { cancelJob, retryJob, runMockPipeline } from "@/lib/fir.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/")({
+  head: () => ({
+    meta: [
+      { title: "Dashboard Overview — SCENEIQ" },
+      { name: "description", content: "Live FIR pipeline stats, analytics and recent case activity for SCENEIQ SuperAdmins." },
+      { property: "og:title", content: "Dashboard Overview — SCENEIQ" },
+      { property: "og:description", content: "Live FIR pipeline stats, analytics and recent case activity for SCENEIQ SuperAdmins." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: DashboardHome,
 });
 

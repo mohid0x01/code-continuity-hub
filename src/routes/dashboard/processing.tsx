@@ -13,7 +13,21 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/dashboard/processing")({
-  validateSearch: (search) => searchSchema.parse(search),
+  head: () => ({
+    meta: [
+      { title: "Pipeline Processing — SCENEIQ" },
+      { name: "description", content: "Live progress of the SCENEIQ AI pipeline stages for a submitted FIR." },
+      { property: "og:title", content: "Pipeline Processing — SCENEIQ" },
+      { property: "og:description", content: "Live progress of the SCENEIQ AI pipeline stages for a submitted FIR." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  // A bad query string must not blow up the page shell.
+  validateSearch: (search) => {
+    const parsed = searchSchema.safeParse(search);
+    return parsed.success ? parsed.data : {};
+  },
   component: ProcessingPage,
 });
 
