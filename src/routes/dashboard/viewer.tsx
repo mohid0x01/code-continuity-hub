@@ -45,7 +45,9 @@ const Scene3DCanvas = lazy(() =>
 const CrimeMap = lazy(() =>
   import("@/components/CrimeMap").then((m) => ({ default: m.CrimeMap }))
 );
-import { geocodeFirText } from "@/components/CrimeMap";
+// Import the pure geocoder directly — importing it from CrimeMap pulls Leaflet
+// into the SSR graph and crashes server rendering with "window is not defined".
+import { geocodeFirText } from "@/lib/geocode";
 
 const searchSchema = z.object({ jobId: z.string().optional(), debug: z.coerce.boolean().optional() });
 
