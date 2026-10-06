@@ -9,24 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
-import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
-import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
-import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
-import { Route as DashboardReconstructionsRouteImport } from './routes/dashboard/reconstructions'
-import { Route as DashboardProcessingRouteImport } from './routes/dashboard/processing'
-import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
 import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
-import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
-import { Route as ApiPublicVisitorRouteImport } from './routes/api/public/visitor'
+import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
+import { Route as DashboardProcessingRouteImport } from './routes/dashboard/processing'
+import { Route as DashboardReconstructionsRouteImport } from './routes/dashboard/reconstructions'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
+import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
+import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
 import { Route as ApiProxySplatRouteImport } from './routes/api/proxy/$'
+import { Route as ApiPublicVisitorRouteImport } from './routes/api/public/visitor'
+import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -34,9 +34,9 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -44,19 +44,19 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardViewerRoute = DashboardViewerRouteImport.update({
-  id: '/viewer',
-  path: '/viewer',
+const DashboardArchiveRoute = DashboardArchiveRouteImport.update({
+  id: '/archive',
+  path: '/archive',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardSubmitRoute = DashboardSubmitRouteImport.update({
-  id: '/submit',
-  path: '/submit',
+const DashboardAuditRoute = DashboardAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const DashboardProcessingRoute = DashboardProcessingRouteImport.update({
+  id: '/processing',
+  path: '/processing',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardReconstructionsRoute =
@@ -65,24 +65,24 @@ const DashboardReconstructionsRoute =
     path: '/reconstructions',
     getParentRoute: () => DashboardRoute,
   } as any)
-const DashboardProcessingRoute = DashboardProcessingRouteImport.update({
-  id: '/processing',
-  path: '/processing',
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardAuditRoute = DashboardAuditRouteImport.update({
-  id: '/audit',
-  path: '/audit',
+const DashboardSubmitRoute = DashboardSubmitRouteImport.update({
+  id: '/submit',
+  path: '/submit',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardArchiveRoute = DashboardArchiveRouteImport.update({
-  id: '/archive',
-  path: '/archive',
+const DashboardViewerRoute = DashboardViewerRouteImport.update({
+  id: '/viewer',
+  path: '/viewer',
   getParentRoute: () => DashboardRoute,
 } as any)
-const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
-  id: '/api/v1/$',
-  path: '/api/v1/$',
+const ApiProxySplatRoute = ApiProxySplatRouteImport.update({
+  id: '/api/proxy/$',
+  path: '/api/proxy/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicVisitorRoute = ApiPublicVisitorRouteImport.update({
@@ -90,9 +90,9 @@ const ApiPublicVisitorRoute = ApiPublicVisitorRouteImport.update({
   path: '/api/public/visitor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiProxySplatRoute = ApiProxySplatRouteImport.update({
-  id: '/api/proxy/$',
-  path: '/api/proxy/$',
+const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
+  id: '/api/v1/$',
+  path: '/api/v1/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -205,11 +205,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -219,11 +219,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -233,39 +233,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/viewer': {
-      id: '/dashboard/viewer'
-      path: '/viewer'
-      fullPath: '/dashboard/viewer'
-      preLoaderRoute: typeof DashboardViewerRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/submit': {
-      id: '/dashboard/submit'
-      path: '/submit'
-      fullPath: '/dashboard/submit'
-      preLoaderRoute: typeof DashboardSubmitRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/settings': {
-      id: '/dashboard/settings'
-      path: '/settings'
-      fullPath: '/dashboard/settings'
-      preLoaderRoute: typeof DashboardSettingsRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/reconstructions': {
-      id: '/dashboard/reconstructions'
-      path: '/reconstructions'
-      fullPath: '/dashboard/reconstructions'
-      preLoaderRoute: typeof DashboardReconstructionsRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/processing': {
-      id: '/dashboard/processing'
-      path: '/processing'
-      fullPath: '/dashboard/processing'
-      preLoaderRoute: typeof DashboardProcessingRouteImport
+    '/dashboard/archive': {
+      id: '/dashboard/archive'
+      path: '/archive'
+      fullPath: '/dashboard/archive'
+      preLoaderRoute: typeof DashboardArchiveRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/dashboard/audit': {
@@ -275,18 +247,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAuditRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/archive': {
-      id: '/dashboard/archive'
-      path: '/archive'
-      fullPath: '/dashboard/archive'
-      preLoaderRoute: typeof DashboardArchiveRouteImport
+    '/dashboard/processing': {
+      id: '/dashboard/processing'
+      path: '/processing'
+      fullPath: '/dashboard/processing'
+      preLoaderRoute: typeof DashboardProcessingRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/api/v1/$': {
-      id: '/api/v1/$'
-      path: '/api/v1/$'
-      fullPath: '/api/v1/$'
-      preLoaderRoute: typeof ApiV1SplatRouteImport
+    '/dashboard/reconstructions': {
+      id: '/dashboard/reconstructions'
+      path: '/reconstructions'
+      fullPath: '/dashboard/reconstructions'
+      preLoaderRoute: typeof DashboardReconstructionsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/submit': {
+      id: '/dashboard/submit'
+      path: '/submit'
+      fullPath: '/dashboard/submit'
+      preLoaderRoute: typeof DashboardSubmitRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/viewer': {
+      id: '/dashboard/viewer'
+      path: '/viewer'
+      fullPath: '/dashboard/viewer'
+      preLoaderRoute: typeof DashboardViewerRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/api/proxy/$': {
+      id: '/api/proxy/$'
+      path: '/api/proxy/$'
+      fullPath: '/api/proxy/$'
+      preLoaderRoute: typeof ApiProxySplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/visitor': {
@@ -296,11 +296,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicVisitorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/proxy/$': {
-      id: '/api/proxy/$'
-      path: '/api/proxy/$'
-      fullPath: '/api/proxy/$'
-      preLoaderRoute: typeof ApiProxySplatRouteImport
+    '/api/v1/$': {
+      id: '/api/v1/$'
+      path: '/api/v1/$'
+      fullPath: '/api/v1/$'
+      preLoaderRoute: typeof ApiV1SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
