@@ -66,18 +66,18 @@ export const Route = createFileRoute("/dashboard/viewer")({
   // "This page didn't load" shell instead of the viewer.
   validateSearch: (search) => {
     const parsed = searchSchema.safeParse(search);
-    return parsed.success ? parsed.data : {};
+    return parsed.success ? parsed.data : ({} as z.infer<typeof searchSchema>);
   },
   component: SceneViewer,
   errorComponent: ViewerError,
 });
 
-function ViewerError({ error }: { error: Error }) {
+function ViewerError({ error }: { error: unknown }) {
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
       <AlertTriangle className="h-8 w-8 text-amber-400" />
       <h2 className="text-lg font-semibold text-text-primary">Viewer could not render this case</h2>
-      <p className="max-w-md text-sm text-text-muted">{error?.message || "Unknown rendering error."}</p>
+      <p className="max-w-md text-sm text-text-muted">{(error instanceof Error ? error.message : "") || "Unknown rendering error."}</p>
       <div className="mt-2 flex gap-2">
         <button onClick={() => window.location.reload()} className="rounded-[6px] bg-emerald-500/15 px-4 py-2 text-sm text-emerald-400">Try again</button>
         <Link to="/dashboard" className="rounded-[6px] border border-border-accent px-4 py-2 text-sm text-text-secondary">Back to dashboard</Link>
