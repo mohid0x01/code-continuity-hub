@@ -66,13 +66,13 @@ export const Route = createFileRoute("/dashboard/viewer")({
   // "This page didn't load" shell instead of the viewer.
   validateSearch: (search) => {
     const parsed = searchSchema.safeParse(search);
-    return parsed.success ? parsed.data : {};
+    return parsed.success ? parsed.data : ({} as z.infer<typeof searchSchema>);
   },
   component: SceneViewer,
   errorComponent: ViewerError,
 });
 
-function ViewerError({ error }: { error: Error }) {
+function ViewerError({ error }: { error: unknown }) {
   return (
     <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
       <AlertTriangle className="h-8 w-8 text-amber-400" />

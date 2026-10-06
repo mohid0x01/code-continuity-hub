@@ -26,7 +26,7 @@ export const Route = createFileRoute("/dashboard/processing")({
   // A bad query string must not blow up the page shell.
   validateSearch: (search) => {
     const parsed = searchSchema.safeParse(search);
-    return parsed.success ? parsed.data : {};
+    return parsed.success ? parsed.data : ({} as z.infer<typeof searchSchema>);
   },
   component: ProcessingPage,
 });
