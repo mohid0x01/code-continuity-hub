@@ -102,6 +102,9 @@ export type Database = {
       }
       fir_jobs: {
         Row: {
+          ai_video_error: string | null
+          ai_video_job_id: string | null
+          ai_video_path: string | null
           created_at: string
           error_message: string | null
           fir_id: string
@@ -110,6 +113,7 @@ export type Database = {
           officer_id: string
           pipeline_progress: Json | null
           processing_time_ms: number | null
+          render_mode: string
           scene_manifest: Json | null
           status: Database["public"]["Enums"]["job_status"]
           updated_at: string
@@ -117,6 +121,9 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          ai_video_error?: string | null
+          ai_video_job_id?: string | null
+          ai_video_path?: string | null
           created_at?: string
           error_message?: string | null
           fir_id: string
@@ -125,6 +132,7 @@ export type Database = {
           officer_id: string
           pipeline_progress?: Json | null
           processing_time_ms?: number | null
+          render_mode?: string
           scene_manifest?: Json | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
@@ -132,6 +140,9 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          ai_video_error?: string | null
+          ai_video_job_id?: string | null
+          ai_video_path?: string | null
           created_at?: string
           error_message?: string | null
           fir_id?: string
@@ -140,6 +151,7 @@ export type Database = {
           officer_id?: string
           pipeline_progress?: Json | null
           processing_time_ms?: number | null
+          render_mode?: string
           scene_manifest?: Json | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
