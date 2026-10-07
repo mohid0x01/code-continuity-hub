@@ -144,7 +144,7 @@ git add . && git commit -m "vercel deployment" && git push origin main
 |---|---|---|
 | `SUPABASE_URL` | `https://yayosibohzruoplhownd.supabase.co` (from `.env`) | Server |
 | `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...` (from `.env`) | Server |
-| `VITE_SUPABASE_URL` | `https://YOUR-DOMAIN/api/proxy` (hides the DB host from the browser) | Client |
+| `VITE_SUPABASE_URL` | **must be the full `https://yayosibohzruoplhownd.supabase.co`** — a relative value like `/api/proxy` crashes the app with `Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL` | Client |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | same publishable key | Client |
 | `VITE_SUPABASE_PROJECT_ID` | from `.env` | Client |
 | `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` | from `.env` | Client |
