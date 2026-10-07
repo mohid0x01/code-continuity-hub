@@ -1,0 +1,1 @@
+- [ ] Fix login "Invalid supabaseUrl" on Vercel: VITE_SUPABASE_URL must be a full https:// URL (env guide correction + redeploy)
