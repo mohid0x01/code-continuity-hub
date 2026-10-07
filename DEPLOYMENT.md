@@ -112,80 +112,88 @@ Cloudflare Pages → Deployments → pick a previous deploy → **Rollback to th
 
 ## 3. (Alternative) Frontend on Vercel
 
-TanStack Start works on Vercel out-of-the-box via the official Vite adapter.
+> **Verified setup.** The build emits Vercel's Build Output API (`.vercel/output`)
+> via Nitro's `vercel` preset — SSR, server functions and `/api/v1/*` routes all
+> run as one serverless function. Locally tested end-to-end with `vercel build`.
+
+**How it works (already wired in the repo):**
+- `vite.config.ts` attaches Nitro **only when `VERCEL=1`** (set by Vercel's build
+  runner) or when `NITRO_PRESET` is set — the Lovable preview and local dev are
+  untouched.
+- `vercel.json` pins Framework: **None**, Install: `bun install`,
+  Build: `bun run build`. No Output Directory setting is needed — Vercel picks up
+  `.vercel/output` automatically.
 
 ### Step 1 — Push the repo to GitHub
 
 ```bash
-git init && git add . && git commit -m "init"
-git remote add origin <your-github-repo>
-git push -u origin main
+git add . && git commit -m "vercel deployment" && git push origin main
 ```
 
-### Step 2 — Install Vercel adapter (one-time)
+### Step 2 — Import in Vercel
 
-```bash
-bun add -d @tanstack/start-server-functions-vercel @vercel/node
-```
+1. Go to <https://vercel.com/new> → Import `mohid0x01/code-continuity-hub`.
+2. Leave all build settings as-is — they come from `vercel.json`.
+3. Click **Deploy** (first build can fail on missing env vars — add them in Step 3, then redeploy).
 
-Update `vite.config.ts` target if you want to default to Vercel:
+### Step 3 — Environment Variables
 
-```ts
-// vite.config.ts
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-
-export default defineConfig({
-  plugins: [tanstackStart({ target: "vercel" })],
-});
-```
-
-(Cloudflare Workers target is still supported — `target: "cloudflare-module"`.)
-
-### Step 3 — Import project in Vercel
-
-1. Go to <https://vercel.com/new> → Import your GitHub repo.
-2. Framework preset: **Other** (Vercel auto-detects Vite).
-3. Build Command: `bun run build`
-4. Output Directory: `.output/public` (TanStack Start default)
-
-### Step 4 — Environment Variables
-
-Add these in **Vercel Project → Settings → Environment Variables**:
+**Vercel → Project → Settings → Environment Variables** (add for Production **and** Preview):
 
 | Name | Value | Scope |
 |---|---|---|
-| `SUPABASE_URL` | (from `.env`) | Server |
-| `SUPABASE_PUBLISHABLE_KEY` | (from `.env`) | Server |
-| `SUPABASE_SERVICE_ROLE_KEY` | (from Lovable Cloud → API) | Server |
-| `LOVABLE_API_KEY` | (from Lovable Cloud → Secrets) | Server |
-| `VITE_SUPABASE_URL` | **leave blank or set to `/api/proxy`** | Client |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | (same publishable key) | Client |
+| `SUPABASE_URL` | `https://yayosibohzruoplhownd.supabase.co` (from `.env`) | Server |
+| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...` (from `.env`) | Server |
+| `VITE_SUPABASE_URL` | `https://YOUR-DOMAIN/api/proxy` (hides the DB host from the browser) | Client |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | same publishable key | Client |
+| `VITE_SUPABASE_PROJECT_ID` | from `.env` | Client |
+| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` | from `.env` | Client |
+| `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID` | from `.env` (optional) | Client |
+| `SUPABASE_SERVICE_ROLE_KEY` | **not available on Lovable Cloud — leave unset** | — |
+| `LOVABLE_API_KEY` | **not available on Lovable Cloud — leave unset** | — |
 
-> **Hide the Supabase URL:** set `VITE_SUPABASE_URL=https://YOUR-DOMAIN/api/proxy`.
-> The proxy route at `src/routes/api/proxy/$.ts` forwards `rest/v1/*`,
-> `storage/v1/*`, and `functions/v1/*` to the real Supabase host server-side.
-> The browser never sees `yayosibohzruoplhownd.supabase.co`.
->
-> Realtime (WebSocket) still connects directly to Supabase — proxying WS through
-> Vercel edge isn't supported. If you need realtime fully hidden, host on a
-> server that supports WS proxying (Cloudflare Workers / Fly.io).
+> Without the two managed secrets, admin-only server operations and the AI
+> pipeline stages that need the gateway key will not run on Vercel. Use the
+> in-app **Settings → API Keys (BYOK)** for AI, or publish on Lovable for the
+> full feature set. Realtime notifications are browser-side WebSockets and
+> work as-is (they connect directly to the DB host, not through Vercel).
 
-### Step 5 — Deploy
+### Step 4 — Deploy
 
-Push to `main` → Vercel auto-deploys. First deploy ~2 minutes.
+Push to `main` → Vercel auto-deploys. Build takes ~2 minutes.
+
+### Step 5 — Verify
+
+- `https://<project>.vercel.app/` → landing page renders (SSR).
+- `https://<project>.vercel.app/api/v1/health` → `{ok:true, ...}`.
+- Sign in → dashboard loads → submit an FIR → pipeline completes.
 
 ### Custom Domain
 
-Vercel → Project → Domains → Add. DNS: CNAME `cname.vercel-dns.com`.
+Vercel → Project → Settings → Domains → Add `scene-iq.teamcyberops.xyz`.
+DNS: CNAME `scene-iq` → `cname.vercel-dns.com` (or Vercel's A record for apex).
+Remove any old Cloudflare DNS record for the same host. SSL is automatic.
 
-## 3. Post-deploy checks
+### Rollback
+
+Vercel → Deployments → pick a previous deploy → **Promote to Production**.
+
+### Troubleshooting
+
+- **`No Output Directory named "public"`** → deploying a commit older than the
+  fix; push the latest code (the `vercel.json` + Nitro wiring).
+- **500 on every route** → env vars missing in Step 3.
+- **`Expected 3 parts in JWT; got 1`** → service-role key set as
+  `SUPABASE_PUBLISHABLE_KEY` — swap them.
+- **Slow cold starts** → the server bundle is large (Three.js, Leaflet, jsPDF);
+  normal for a hobby plan, Pro instances start faster.
+
+---
+
+## 4. Post-deploy checks (either host)
 
 - Open `/` — landing page loads.
-- Sign up / log in — auth works through Supabase publishable key.
+- Sign in — auth works through the publishable key.
 - Submit an FIR — pipeline progresses through 5 stages, fallback chain works.
-- DevTools → Network: confirm `rest/v1/...` calls hit `/api/proxy/rest/v1/...`
+- DevTools → Network: confirm REST calls hit `/api/proxy/rest/v1/...`
   (not `*.supabase.co`).
-
-## 4. Rollback
-
-Vercel → Deployments → pick previous → "Promote to Production".
