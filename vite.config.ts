@@ -5,7 +5,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(async ({ command }) => {
-  const plugins: Plugin[] = [tanstackStart(), tailwindcss(), react(), tsconfigPaths()];
+  const plugins: PluginOption[] = [tanstackStart(), tailwindcss(), react(), tsconfigPaths()];
 
   // Nitro is only attached when the build targets a deploy host:
   //  - VERCEL=1 (set by Vercel's build runner) -> "vercel" preset
