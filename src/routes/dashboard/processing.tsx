@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, Loader, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { startAiVideo } from "@/lib/ai-video.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { retryJob, runMockPipeline } from "@/lib/fir.functions";
@@ -84,9 +85,16 @@ function ProcessingPage() {
   const attempts = progress.attempts ?? [];
   const activeModel = job?.llm_model;
 
-  // Auto-navigate on completion (once)
+  const startAiVideoFn = useServerFn(startAiVideo);
+  const aiStartedRef = useRef(false);
+  // Auto-navigate on completion (once). AI-mode jobs kick off the AI clip first.
   useEffect(() => {
     if (isCompleted && jobId) {
+      const mode = (job as Record<string, unknown> | null)?.render_mode;
+      if (mode === "ai" && !aiStartedRef.current) {
+        aiStartedRef.current = true;
+        startAiVideoFn({ data: { jobId } }).catch((e) => toast.error(e instanceof Error ? e.message : "AI video failed to start"));
+      }
       const t = setTimeout(() => navigate({ to: "/dashboard/viewer", search: { jobId } }), 1500);
       return () => clearTimeout(t);
     }
