@@ -12,6 +12,7 @@ const submitFirSchema = z.object({
   incidentDate: z.string().nullable(),
   incidentType: z.enum(["theft", "assault", "vehicular", "property", "kidnapping", "robbery", "other"]),
   narrative: z.string().min(10).max(50000),
+  renderMode: z.enum(["ai", "system"]).default("system"),
 });
 
 export const submitFir = createServerFn({ method: "POST" })
@@ -47,13 +48,14 @@ export const submitFir = createServerFn({ method: "POST" })
         officer_id: userId,
         status: "pending",
         pipeline_progress: {},
+        render_mode: data.renderMode,
       })
       .select("id")
       .single();
 
     if (jobError) throw new Error(`Failed to create job: ${jobError.message}`);
 
-    return { firId: fir.id, jobId: job.id, caseNumber: fir.case_number };
+    return { firId: fir.id, jobId: job.id, caseNumber: fir.case_number, renderMode: data.renderMode };
   });
 
 export const getJobStatus = createServerFn({ method: "POST" })

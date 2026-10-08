@@ -32,6 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useServerFn } from "@tanstack/react-start";
 import { queueVideoGeneration, uploadRenderedVideo } from "@/lib/video.functions";
+import { pollAiVideo, startAiVideo } from "@/lib/ai-video.functions";
 import { logAuditEvent } from "@/lib/audit.functions";
 import { exportCourtReportPDF } from "@/lib/pdf-export";
 import { EvidenceManager } from "@/components/EvidenceManager";
@@ -239,7 +240,34 @@ function SceneViewer() {
   const firRec = firFull ?? ((job as Record<string, unknown>)?.fir_records as Record<string, unknown> | undefined);
   const firId = (firRec?.id as string | undefined) ?? undefined;
   const videoUrl = (job as Record<string, unknown>)?.video_url as string | null | undefined;
-  const videoStatus = (job as Record<string, unknown>)?.video_status as string | null | undefined;
+  const videoStatusRaw = (job as Record<string, unknown>)?.video_status as string | null | undefined;
+  const [aiState, setAiState] = useState<{ status: string; url?: string | null; error?: string; progress?: number } | null>(null);
+  const videoUrl2 = aiState?.url ?? videoUrl;
+  const videoStatus = aiState?.status ?? videoStatusRaw;
+  const aiError = aiState?.error ?? ((job as Record<string, unknown>)?.ai_video_error as string | null | undefined);
+  const pollAiFn = useServerFn(pollAiVideo);
+  const startAiFn = useServerFn(startAiVideo);
+  // Poll the AI clip while it renders; the server stores the MP4 then returns its URL.
+  useEffect(() => {
+    if (!jobId || (videoStatus !== "ai_processing" && videoStatus !== "processing")) return;
+    if (videoStatusRaw !== "ai_processing" && aiState?.status !== "processing") return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await pollAiFn({ data: { jobId } });
+        if (stop) return;
+        setAiState(r as never);
+        if (r.status === "processing") setTimeout(tick, 8000);
+      } catch (e) { if (!stop) setAiState({ status: "ai_failed", error: e instanceof Error ? e.message : "Poll failed" }); }
+    };
+    tick();
+    return () => { stop = true; };
+  }, [jobId, videoStatusRaw]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleAiVideo = async () => {
+    if (!jobId) return;
+    try { await startAiFn({ data: { jobId } }); setAiState({ status: "processing" }); }
+    catch (e) { setAiState({ status: "ai_failed", error: e instanceof Error ? e.message : "Failed" }); }
+  };
 
   // Primary FIR pin extracted from the officer-selected location on submit.
   const primaryPin = (() => {
@@ -548,8 +576,8 @@ function SceneViewer() {
             </>
           ) : tab === "video" ? (
             <div className="flex h-[calc(100%-2.5rem)] items-center justify-center p-8">
-              {videoUrl ? (
-                <video src={videoUrl} controls className="max-h-full max-w-full rounded-[6px] border border-border-subtle shadow-2xl" />
+              {videoUrl2 ? (
+                <video src={videoUrl2} controls className="max-h-full max-w-full rounded-[6px] border border-border-subtle shadow-2xl" />
               ) : (
                 <div className="text-center">
                   <Film className="mx-auto h-12 w-12 text-emerald-400/50" />
@@ -562,6 +590,11 @@ function SceneViewer() {
                     className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
                     <Sparkles className="h-4 w-4" /> {recording ? "Recording…" : "Generate 3D Video"}
                   </button>
+                  <button onClick={handleAiVideo} disabled={videoStatus === "processing" || videoStatus === "ai_processing"}
+                    className="mt-3 ml-3 inline-flex items-center gap-2 rounded-[8px] border border-emerald-500/30 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50">
+                    {videoStatus === "processing" || videoStatus === "ai_processing" ? `AI rendering… ${aiState?.progress ?? 0}%` : "Generate with AI"}
+                  </button>
+                  {aiError && videoStatus === "ai_failed" && <p className="mt-3 text-xs text-destructive">{aiError}</p>}
                 </div>
               )}
             </div>

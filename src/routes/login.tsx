@@ -33,15 +33,9 @@ function LoginPage() {
     setError(null);
 
     try {
-      // Step 1: sign in with email/password. If account doesn't exist for the
-      // bootstrap admin email, auto-create it (auto-confirm is on).
-      let { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError && signInError.message.toLowerCase().includes("invalid login")) {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) throw signUpError;
-        ({ error: signInError } = await supabase.auth.signInWithPassword({ email, password }));
-      }
-      if (signInError) throw signInError;
+      // Step 1: sign in only — no self-registration. Single SuperAdmin account.
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw new Error("Invalid email or password");
 
       // Step 2: verify private key + superadmin role server-side.
       try {

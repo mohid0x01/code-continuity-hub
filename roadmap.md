@@ -1,1 +1,6 @@
 - [ ] Fix login "Invalid supabaseUrl" on Vercel: VITE_SUPABASE_URL must be a full https:// URL (env guide correction + redeploy)
+- [x] Single SuperAdmin login only (self-registration removed, sign-ups disabled)
+- [x] Proofs uploaded with FIR at submission
+- [x] Final step asks: With AI Help vs SCENEIQ Engine
+- [x] AI mode: realistic AI re-enactment clip, stored in private storage, then shown in viewer
+- [ ] Upgrade SCENEIQ Engine 3D graphics quality (next turn)
