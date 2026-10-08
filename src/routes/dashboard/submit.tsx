@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { submitFir, runMockPipeline } from "@/lib/fir.functions";
+import { registerEvidence } from "@/lib/evidence.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
-import { Lock, Sparkles, FileText } from "lucide-react";
+import { Lock, Sparkles, FileText, Paperclip, X, Bot, Cpu } from "lucide-react";
 
 // Load all template files from /Commands at build time.
 const templateModules = import.meta.glob("/Commands/*.txt", {
@@ -71,6 +72,8 @@ function SubmitFIR() {
   const [incidentType, setIncidentType] = useState<typeof incidentTypes[number]["value"]>("assault");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [askMode, setAskMode] = useState(false);
   const navigate = useNavigate();
 
   // Show a preview of the next case number (purely cosmetic — real number is
@@ -83,7 +86,12 @@ function SubmitFIR() {
 
   const submitFirFn = useServerFn(submitFir);
   const runPipelineFn = useServerFn(runMockPipeline);
+  const registerEvidenceFn = useServerFn(registerEvidence);
 
+  const detectType = (f: File) =>
+    f.type.startsWith("image/") ? "photo" : f.type.startsWith("audio/") ? "audio" : f.type.startsWith("video/") ? "video" : "document";
+
+  // Final button → validate, then ask the officer how to build the scene.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (narrative.length < 10) {
@@ -95,8 +103,14 @@ function SubmitFIR() {
       return;
     }
 
-    setSubmitting(true);
     setError(null);
+    setAskMode(true);
+  };
+
+  const submitWithMode = async (renderMode: "ai" | "system") => {
+    if (!location) return;
+    setAskMode(false);
+    setSubmitting(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -115,8 +129,21 @@ function SubmitFIR() {
           incidentDate: incidentDate || null,
           incidentType,
           narrative,
+          renderMode,
         },
       });
+
+      // Upload proofs submitted with the FIR into private storage.
+      for (const file of files) {
+        const ext = file.name.split(".").pop() ?? "bin";
+        const path = `${result.firId}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("evidence").upload(path, file, { contentType: file.type });
+        if (upErr) { console.error(upErr); continue; }
+        await registerEvidenceFn({ data: {
+          firId: result.firId, storagePath: path, fileName: file.name,
+          fileType: detectType(file), mimeType: file.type, fileSize: file.size,
+        } }).catch(console.error);
+      }
 
       // Fire pipeline in background (don't await)
       runPipelineFn({ data: { jobId: result.jobId } }).catch(console.error);
@@ -238,6 +265,36 @@ function SubmitFIR() {
             </div>
           </div>
 
+          <div>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">
+              <Paperclip className="h-3 w-3" /> Proofs / Evidence (photos, audio, video, documents)
+            </label>
+            <input
+              type="file"
+              multiple
+              accept="image/*,audio/*,video/*,application/pdf"
+              onChange={(e) => {
+                const picked = Array.from(e.target.files ?? []).filter((f) => f.size <= 25 * 1024 * 1024);
+                setFiles((prev) => [...prev, ...picked]);
+                e.target.value = "";
+              }}
+              className="glass-input mt-2 w-full rounded-[6px] px-4 py-3 text-sm text-text-primary"
+            />
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between rounded-[4px] border border-border-subtle px-3 py-1.5 text-xs text-text-secondary">
+                    <span className="truncate">{f.name} · {(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label="Remove file">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-1.5 text-[10px] text-text-muted">Max 25 MB per file. Saved with the FIR at submission.</p>
+          </div>
+
           <motion.button
             type="submit"
             disabled={submitting || !location}
@@ -291,6 +348,34 @@ function SubmitFIR() {
           </p>
         </div>
       </motion.div>
+
+      {askMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm" role="dialog" aria-modal>
+          <div className="glass-card w-full max-w-lg rounded-[12px] p-6">
+            <h2 className="font-display text-xl font-bold text-text-primary">How should the scene be built?</h2>
+            <p className="mt-1 text-sm text-text-secondary">Choose how SCENEIQ reconstructs this incident.</p>
+            <div className="mt-5 grid gap-3">
+              <button type="button" onClick={() => submitWithMode("ai")}
+                className="glass-card flex items-start gap-3 rounded-[8px] p-4 text-left hover:border-emerald-400/50">
+                <Bot className="mt-0.5 h-5 w-5 text-emerald-400" />
+                <span>
+                  <span className="block text-sm font-semibold text-text-primary">With AI Help</span>
+                  <span className="block text-xs text-text-muted">AI plans every character's actions and generates a realistic 8-second re-enactment video of the real street, plus the 3D map scene. Uses AI credits; takes 1–3 minutes.</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => submitWithMode("system")}
+                className="glass-card flex items-start gap-3 rounded-[8px] p-4 text-left hover:border-emerald-400/50">
+                <Cpu className="mt-0.5 h-5 w-5 text-text-secondary" />
+                <span>
+                  <span className="block text-sm font-semibold text-text-primary">SCENEIQ Engine</span>
+                  <span className="block text-xs text-text-muted">Builds the 3D scene from the real map (roads, buildings) with 3D characters, and records the video in the browser.</span>
+                </span>
+              </button>
+            </div>
+            <button type="button" onClick={() => setAskMode(false)} className="mt-4 w-full text-xs text-text-muted hover:text-text-secondary">Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
