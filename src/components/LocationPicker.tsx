@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin, Loader2, Crosshair } from "lucide-react";
-import { resolvePickedPoint } from "@/lib/location-scene.functions";
+import { resolvePickedPoint, searchPlaces, getPlaceDetails } from "@/lib/location-scene.functions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -25,7 +25,7 @@ type Suggestion = { placeId: string; primary: string; secondary: string };
  * Cascading Pakistan location picker:
  *  1. City / District autocomplete (restricted to PK, admin level)
  *  2. Area / Locality autocomplete biased to that city
- * Uses Google Places API (New) via the browser key.
+ * Place search runs on the server (Places API New); the browser only renders the map.
  */
 export function LocationPicker({
   onChange,
@@ -55,29 +55,15 @@ export function LocationPicker({
   const mapObjRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
-  // Wait for Google Maps Places lib
+  // Places search is server-side, so inputs are usable immediately.
   useEffect(() => {
-    let cancelled = false;
-    const tick = async () => {
-      if (window.google?.maps?.importLibrary) {
-        try {
-          await window.google.maps.importLibrary("places");
-          if (!cancelled) {
-            sessionRef.current = new window.google.maps.places.AutocompleteSessionToken();
-            setReady(true);
-          }
-        } catch {
-          /* try again */
-        }
-      } else if (!cancelled) {
-        setTimeout(tick, 250);
-      }
-    };
-    tick();
-    return () => {
-      cancelled = true;
-    };
+    sessionRef.current = crypto.randomUUID();
+    setReady(true);
   }, []);
+
+  const newSession = () => {
+    sessionRef.current = crypto.randomUUID();
+  };
 
   // Debounced city autocomplete
   useEffect(() => {
@@ -87,20 +73,14 @@ export function LocationPicker({
     }
     const handle = setTimeout(async () => {
       try {
-        const { suggestions } =
-          await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        const list = await searchPlaces({
+          data: {
             input: cityInput,
-            includedRegionCodes: ["PK"],
-            includedPrimaryTypes: ["locality", "administrative_area_level_2", "administrative_area_level_3"],
             sessionToken: sessionRef.current,
-          });
-        setCitySuggestions(
-          (suggestions ?? []).slice(0, 6).map((s: any) => ({
-            placeId: s.placePrediction?.placeId ?? "",
-            primary: s.placePrediction?.mainText?.text ?? "",
-            secondary: s.placePrediction?.secondaryText?.text ?? "",
-          })),
-        );
+            primaryTypes: ["locality", "administrative_area_level_2", "administrative_area_level_3"],
+          },
+        });
+        setCitySuggestions(list);
       } catch (err) {
         console.error("City autocomplete", err);
       }
@@ -116,23 +96,14 @@ export function LocationPicker({
     }
     const handle = setTimeout(async () => {
       try {
-        const { suggestions } =
-          await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        const list = await searchPlaces({
+          data: {
             input: areaInput,
-            includedRegionCodes: ["PK"],
-            locationBias: {
-              center: { lat: selectedCity.lat, lng: selectedCity.lng },
-              radius: 25000,
-            },
             sessionToken: sessionRef.current,
-          });
-        setAreaSuggestions(
-          (suggestions ?? []).slice(0, 6).map((s: any) => ({
-            placeId: s.placePrediction?.placeId ?? "",
-            primary: s.placePrediction?.mainText?.text ?? "",
-            secondary: s.placePrediction?.secondaryText?.text ?? "",
-          })),
-        );
+            bias: { lat: selectedCity.lat, lng: selectedCity.lng, radius: 25000 },
+          },
+        });
+        setAreaSuggestions(list);
       } catch (err) {
         console.error("Area autocomplete", err);
       }
@@ -151,20 +122,10 @@ export function LocationPicker({
         const center = picked
           ? { lat: picked.latitude, lng: picked.longitude }
           : { lat: selectedCity.lat, lng: selectedCity.lng };
-        const { suggestions } =
-          await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-            input: spotInput,
-            includedRegionCodes: ["PK"],
-            locationBias: { center, radius: 12000 },
-            sessionToken: sessionRef.current,
-          });
-        setSpotSuggestions(
-          (suggestions ?? []).slice(0, 6).map((s: any) => ({
-            placeId: s.placePrediction?.placeId ?? "",
-            primary: s.placePrediction?.mainText?.text ?? "",
-            secondary: s.placePrediction?.secondaryText?.text ?? "",
-          })),
-        );
+        const list = await searchPlaces({
+          data: { input: spotInput, sessionToken: sessionRef.current, bias: { ...center, radius: 12000 } },
+        });
+        setSpotSuggestions(list);
       } catch (err) {
         console.error("Spot autocomplete", err);
       }
@@ -205,6 +166,7 @@ export function LocationPicker({
     if (!ready || !picked || !mapRef.current) return;
     const center = { lat: picked.latitude, lng: picked.longitude };
     const run = async () => {
+      while (!window.google?.maps?.importLibrary) await new Promise((r) => setTimeout(r, 250));
       await window.google.maps.importLibrary("maps");
       await window.google.maps.importLibrary("marker");
       if (!mapObjRef.current) {
@@ -212,6 +174,7 @@ export function LocationPicker({
           center,
           zoom: 17,
           mapTypeId: "hybrid",
+          clickableIcons: false,
           disableDefaultUI: true,
           zoomControl: true,
         });
@@ -243,11 +206,10 @@ export function LocationPicker({
   const pickCity = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const Place = window.google.maps.places.Place;
-      const place = new Place({ id: s.placeId });
-      await place.fetchFields({ fields: ["displayName", "location"] });
-      const lat = place.location?.lat?.() ?? 0;
-      const lng = place.location?.lng?.() ?? 0;
+      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      newSession();
+      if (!place) throw new Error("Place details unavailable");
+      const { lat, lng } = place;
       setSelectedCity({
         placeId: s.placeId,
         name: s.primary,
@@ -270,15 +232,14 @@ export function LocationPicker({
     if (!selectedCity) return;
     setLoading(true);
     try {
-      const Place = window.google.maps.places.Place;
-      const place = new Place({ id: s.placeId });
-      await place.fetchFields({ fields: ["formattedAddress", "location", "displayName"] });
-      const lat = place.location?.lat?.() ?? 0;
-      const lng = place.location?.lng?.() ?? 0;
+      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      newSession();
+      if (!place) throw new Error("Place details unavailable");
+      const { lat, lng } = place;
       const next: PickedLocation = {
         city: selectedCity.name,
         area: s.primary,
-        formattedAddress: place.formattedAddress ?? `${s.primary}, ${selectedCity.name}`,
+        formattedAddress: place.formattedAddress || `${s.primary}, ${selectedCity.name}`,
         latitude: lat,
         longitude: lng,
         precision: "area",
@@ -297,14 +258,13 @@ export function LocationPicker({
   const pickSpot = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const Place = window.google.maps.places.Place;
-      const place = new Place({ id: s.placeId });
-      await place.fetchFields({ fields: ["formattedAddress", "location", "displayName"] });
-      const lat = place.location?.lat?.() ?? 0;
-      const lng = place.location?.lng?.() ?? 0;
+      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      newSession();
+      if (!place) throw new Error("Place details unavailable");
+      const { lat, lng } = place;
       setSpotInput(s.primary);
       setSpotSuggestions([]);
-      await commitPoint(lat, lng, place.formattedAddress ?? s.primary, "exact");
+      await commitPoint(lat, lng, place.formattedAddress || s.primary, "exact");
     } catch (err) {
       console.error("Fetch spot details", err);
     } finally {
