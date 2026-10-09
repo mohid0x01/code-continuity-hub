@@ -108,6 +108,9 @@ function SceneViewer() {
   const [recording, setRecording] = useState(false);
   const [realWorld, setRealWorld] = useState<RealWorldScene | null>(null);
   const [realWorldLoading, setRealWorldLoading] = useState(false);
+  const [photoreal, setPhotoreal] = useState(true);
+  const [tilesStatus, setTilesStatus] = useState<{ s: "loading" | "ready" | "failed"; msg?: string } | null>(null);
+  const onTilesStatus = useCallback((s: "loading" | "ready" | "failed", msg?: string) => setTilesStatus({ s, msg }), []);
 
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
@@ -507,8 +510,25 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} debug={debugOn} />
+                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} debug={debugOn} photoreal={photoreal} onPhotorealStatus={onTilesStatus} />
               </Suspense>
+
+              {realWorld && (
+                <button
+                  type="button"
+                  onClick={() => { setPhotoreal((v) => !v); setTilesStatus(null); }}
+                  className="glass-input absolute right-4 top-14 rounded-[4px] px-3 py-1.5 text-[10px] uppercase tracking-[0.1em]"
+                  title="Switch between Google photorealistic 3D city and the map-built 3D model"
+                >
+                  {photoreal
+                    ? tilesStatus?.s === "failed"
+                      ? "Google 3D unavailable · map model shown"
+                      : tilesStatus?.s === "ready"
+                        ? "Google 3D City ✓ · switch to map model"
+                        : "Loading Google 3D City…"
+                    : "Map model · switch to Google 3D City"}
+                </button>
+              )}
 
               {/* Real-world overlay badge */}
               <div className="absolute left-4 top-14 rounded-[4px] border border-emerald-500/30 bg-background/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] backdrop-blur">

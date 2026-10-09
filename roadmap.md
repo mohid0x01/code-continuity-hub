@@ -3,4 +3,5 @@
 - [x] Proofs uploaded with FIR at submission
 - [x] Final step asks: With AI Help vs SCENEIQ Engine
 - [x] AI mode: realistic AI re-enactment clip, stored in private storage, then shown in viewer
-- [ ] Upgrade SCENEIQ Engine 3D graphics quality (next turn)
+- [x] SCENEIQ Engine: Google Photorealistic 3D city at incident point (fallback to map model)
+- [x] Place search moved server-side (browser Places stopped working); map functions sign-in only

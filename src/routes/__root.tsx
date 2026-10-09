@@ -93,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         src: `https://maps.googleapis.com/maps/api/js?key=${
           import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ?? ""
-        }&loading=async&libraries=places&v=weekly&channel=${
+        }&loading=async&v=weekly&channel=${
           import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID ?? ""
         }`,
         async: true,

@@ -690,3 +690,66 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
 
   return scene;
 }
+// ---------------------------------------------------------------------------
+// Places (New) proxied through the backend — the browser key no longer
+// authorises Places, so the picker calls these via authenticated server fns.
+// ---------------------------------------------------------------------------
+export async function placesAutocomplete(input: {
+  input: string;
+  sessionToken: string;
+  bias?: { lat: number; lng: number; radius: number };
+  primaryTypes?: string[];
+}) {
+  const body: Record<string, unknown> = {
+    input: input.input,
+    sessionToken: input.sessionToken,
+    includedRegionCodes: ["pk"],
+  };
+  if (input.primaryTypes?.length) body.includedPrimaryTypes = input.primaryTypes;
+  if (input.bias) {
+    body.locationBias = {
+      circle: { center: { latitude: input.bias.lat, longitude: input.bias.lng }, radius: input.bias.radius },
+    };
+  }
+  const res = await googleGateway("/places/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-FieldMask":
+        "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text,suggestions.placePrediction.text.text",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res) return [];
+  type S = { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } };
+  const json = (await res.json().catch(() => null)) as { suggestions?: S[] } | null;
+  return (json?.suggestions ?? [])
+    .map((s) => s.placePrediction)
+    .filter((p): p is NonNullable<S["placePrediction"]> => !!p?.placeId)
+    .slice(0, 6)
+    .map((p) => ({
+      placeId: p.placeId!,
+      primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
+      secondary: p.structuredFormat?.secondaryText?.text ?? "",
+    }));
+}
+
+export async function placeDetails(placeId: string, sessionToken?: string) {
+  const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : "";
+  const res = await googleGateway(`/places/v1/places/${encodeURIComponent(placeId)}${qs}`, {
+    headers: { "X-Goog-FieldMask": "id,displayName,formattedAddress,location" },
+  });
+  if (!res) return null;
+  const p = (await res.json().catch(() => null)) as {
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude?: number; longitude?: number };
+  } | null;
+  if (!p?.location?.latitude || !p.location.longitude) return null;
+  return {
+    name: p.displayName?.text ?? "",
+    formattedAddress: p.formattedAddress ?? "",
+    lat: p.location.latitude,
+    lng: p.location.longitude,
+  };
+}
