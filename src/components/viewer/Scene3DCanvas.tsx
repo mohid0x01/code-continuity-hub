@@ -1,6 +1,7 @@
-import { useRef, useMemo, useEffect } from "react";
+import { useRef, useMemo, useEffect, useState, useCallback } from "react";
+import { GooglePhotorealTiles } from "./GooglePhotorealTiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, Environment, ContactShadows, Sky, Cloud } from "@react-three/drei";
+import { OrbitControls, Html, Environment, Lightformer, ContactShadows, Sky, Cloud } from "@react-three/drei";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
@@ -14,6 +15,9 @@ interface Scene3DCanvasProps {
   events: SceneEvent[];
   realWorld?: RealWorldScene | null;
   debug?: boolean;
+  /** Stream Google Photorealistic 3D city at the incident point (falls back to OSM build). */
+  photoreal?: boolean;
+  onPhotorealStatus?: (status: "loading" | "ready" | "failed", msg?: string) => void;
 }
 
 /**
@@ -748,7 +752,21 @@ function VehicleDebugBounds({ entities }: { entities: SceneEntity[] }) {
   );
 }
 
-export function Scene3DCanvas({ entities, events, realWorld, debug = false }: Scene3DCanvasProps) {
+export function Scene3DCanvas({ entities, events, realWorld, debug = false, photoreal = true, onPhotorealStatus }: Scene3DCanvasProps) {
+  const [tilesFailed, setTilesFailed] = useState(false);
+  const useTiles = photoreal && !!realWorld?.anchor && !tilesFailed;
+  useEffect(() => {
+    setTilesFailed(false);
+  }, [realWorld?.anchor?.lat, realWorld?.anchor?.lng]);
+  useEffect(() => {
+    if (useTiles) onPhotorealStatus?.("loading");
+  }, [useTiles, onPhotorealStatus]);
+  const handleTilesError = useCallback((msg: string) => {
+    console.warn("Google 3D tiles:", msg);
+    setTilesFailed(true);
+    onPhotorealStatus?.("failed", msg);
+  }, [onPhotorealStatus]);
+  const handleTilesReady = useCallback(() => onPhotorealStatus?.("ready"), [onPhotorealStatus]);
   const actorEntities = entities.filter(e => e.entity_type === "actor");
   const vehicleEntities = entities.filter(e => e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
@@ -757,7 +775,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false }: Sc
     <Canvas
       shadows
       dpr={[1.25, 2]}
-      camera={{ position: [14, 9, 16], fov: 45, near: 0.1, far: 400 }}
+      camera={{ position: [14, 9, 16], fov: 45, near: 0.1, far: 4000 }}
       style={{ width: "100%", height: "100%" }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
     >
@@ -778,11 +796,27 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false }: Sc
         shadow-camera-top={40}
         shadow-camera-bottom={-40}
       />
-      <Environment preset="sunset" />
+      {/* Local IBL — a CDN preset fetch can hang the whole scene blank. */}
+      <Environment resolution={256}>
+        <Lightformer intensity={2.2} position={[0, 12, 0]} rotation-x={Math.PI / 2} scale={[20, 20, 1]} />
+        <Lightformer intensity={1.2} color="#ffd9a8" position={[-12, 4, -6]} rotation-y={Math.PI / 2} scale={[24, 3, 1]} />
+        <Lightformer intensity={0.9} color="#bcd8ff" position={[12, 3, 8]} rotation-y={-Math.PI / 2} scale={[24, 3, 1]} />
+      </Environment>
       <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
       <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
-      {realWorld ? <RealWorldEnvironment scene={realWorld} /> : <RealLocationShell />}
+      {useTiles && realWorld ? (
+        <GooglePhotorealTiles
+          lat={realWorld.anchor.lat}
+          lng={realWorld.anchor.lng}
+          onError={handleTilesError}
+          onReady={handleTilesReady}
+        />
+      ) : realWorld ? (
+        <RealWorldEnvironment scene={realWorld} />
+      ) : (
+        <RealLocationShell />
+      )}
 
       <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 
@@ -812,11 +846,11 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false }: Sc
         enableDamping
         dampingFactor={0.1}
         minDistance={5}
-        maxDistance={80}
+        maxDistance={useTiles ? 400 : 80}
         maxPolarAngle={Math.PI / 2.2}
       />
 
-      <fog attach="fog" args={["#b8d2e6", 55, 140]} />
+      <fog attach="fog" args={["#b8d2e6", useTiles ? 300 : 55, useTiles ? 1500 : 140]} />
     </Canvas>
   );
 }
