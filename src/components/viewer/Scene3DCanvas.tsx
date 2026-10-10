@@ -1,4 +1,5 @@
 import { useRef, useMemo, useEffect, useState, useCallback } from "react";
+import { MapGround } from "./MapGround";
 import { GooglePhotorealTiles } from "./GooglePhotorealTiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html, Environment, Lightformer, ContactShadows, Sky, Cloud } from "@react-three/drei";
@@ -398,8 +399,8 @@ function LocationBeacon({ entity }: { entity: SceneEntity }) {
 function polygonToShape(polygon: Array<[number, number]>) {
   const shape = new THREE.Shape();
   polygon.forEach(([x, z], i) => {
-    if (i === 0) shape.moveTo(x, z);
-    else shape.lineTo(x, z);
+    if (i === 0) shape.moveTo(x, -z);
+    else shape.lineTo(x, -z);
   });
   return shape;
 }
@@ -424,8 +425,8 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
     return scene.buildings.map((b, i) => {
       const shape = new THREE.Shape();
       b.footprint.forEach(([x, z], idx) => {
-        if (idx === 0) shape.moveTo(x, z);
-        else shape.lineTo(x, z);
+        if (idx === 0) shape.moveTo(x, -z);
+        else shape.lineTo(x, -z);
       });
       const geom = new THREE.ExtrudeGeometry(shape, {
         depth: b.height,
@@ -494,6 +495,8 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         <planeGeometry args={[scene.radiusMeters * 4, scene.radiusMeters * 4]} />
         <meshStandardMaterial color="#496242" roughness={1} />
       </mesh>
+
+      <MapGround scene={scene} />
 
       {/* Land-use patches (parks, farmland, parking lots) under the roads */}
       {(scene.landuse ?? []).map((a, i) => (
@@ -754,10 +757,12 @@ function VehicleDebugBounds({ entities }: { entities: SceneEntity[] }) {
 
 export function Scene3DCanvas({ entities, events, realWorld, debug = false, photoreal = true, onPhotorealStatus }: Scene3DCanvasProps) {
   const [tilesFailed, setTilesFailed] = useState(false);
+  const [tilesReady, setTilesReady] = useState(false);
   const useTiles = photoreal && !!realWorld?.anchor && !tilesFailed;
   useEffect(() => {
     setTilesFailed(false);
-  }, [realWorld?.anchor?.lat, realWorld?.anchor?.lng]);
+    setTilesReady(false);
+  }, [realWorld?.anchor?.lat, realWorld?.anchor?.lng, photoreal]);
   useEffect(() => {
     if (useTiles) onPhotorealStatus?.("loading");
   }, [useTiles, onPhotorealStatus]);
@@ -766,7 +771,12 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
     setTilesFailed(true);
     onPhotorealStatus?.("failed", msg);
   }, [onPhotorealStatus]);
-  const handleTilesReady = useCallback(() => onPhotorealStatus?.("ready"), [onPhotorealStatus]);
+  const handleTilesReady = useCallback(() => { setTilesReady(true); onPhotorealStatus?.("ready"); }, [onPhotorealStatus]);
+  useEffect(() => {
+    if (!useTiles || tilesReady) return;
+    const timeout = setTimeout(() => handleTilesError("No usable 3D coverage loaded. Showing the real-location map model."), 20000);
+    return () => clearTimeout(timeout);
+  }, [useTiles, tilesReady, handleTilesError]);
   const actorEntities = entities.filter(e => e.entity_type === "actor");
   const vehicleEntities = entities.filter(e => e.entity_type === "vehicle");
   const locationEntities = entities.filter(e => e.entity_type === "location");
@@ -805,6 +815,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
       <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
       <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
 
+      {realWorld && (!useTiles || !tilesReady) && <RealWorldEnvironment scene={realWorld} />}
       {useTiles && realWorld ? (
         <GooglePhotorealTiles
           lat={realWorld.anchor.lat}
@@ -812,11 +823,9 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
           onError={handleTilesError}
           onReady={handleTilesReady}
         />
-      ) : realWorld ? (
-        <RealWorldEnvironment scene={realWorld} />
-      ) : (
+      ) : !realWorld ? (
         <RealLocationShell />
-      )}
+      ) : null}
 
       <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
 

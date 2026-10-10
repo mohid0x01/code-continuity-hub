@@ -12,6 +12,10 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "SCENEIQ — AI-Powered FIR Scene Reconstruction" },
       { name: "description", content: "Upload any FIR narrative. Our AI extracts every actor, location, and event — and renders a 3D animated scene reconstruction in under 30 seconds." },
+      { property: "og:title", content: "SCENEIQ — AI-Powered FIR Scene Reconstruction" },
+      { property: "og:description", content: "Turn FIR narratives into location-based crime scene reconstructions." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
 });
