@@ -1,3 +1,4 @@
+import { mapImagePlacement } from "./map-image";
 export interface RealWorldScene {
   anchor: { lat: number; lng: number };
   buildings: {
@@ -32,6 +33,7 @@ export interface RealWorldScene {
   /** Pedestrian crossings — striped zebra decals on roads. */
   crossings?: Array<[number, number]>;
   staticMapUrl: string | null;
+  staticMapPlacement?: { widthMeters: number; offsetX: number; offsetZ: number; attribution: string };
   address: string | null;
   radiusMeters: number;
   status: "ok" | "partial" | "empty" | "unavailable";
@@ -285,27 +287,38 @@ async function overpassQuery(body: string): Promise<{ elements?: OverpassElement
   return null;
 }
 
-async function googleGateway(path: string, init?: RequestInit) {
+async function googleGateway(path: string, init?: RequestInit, strict = false) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!lovableKey || !mapsKey) return null;
+  if (!lovableKey || !mapsKey) {
+    if (strict) throw new Error("Google Maps connection is not configured. Please connect Google Maps in project settings.");
+    return null;
+  }
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${lovableKey}`);
   headers.set("X-Connection-Api-Key", mapsKey);
-  return withRetry(`google ${path.split("?")[0]}`, 2, async () => {
+  const request = async () => {
     const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
       ...init,
       headers,
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (strict) {
+        let reason: string | undefined;
+        try { reason = JSON.parse(body)?.error?.details?.find((d: { reason?: string }) => d.reason)?.reason; } catch { /* non-JSON error */ }
+        if (reason === "API_KEY_HTTP_REFERRER_BLOCKED") throw new Error("Google Maps server key is referrer-restricted. Set its application restrictions to None or IP addresses in Google Cloud Console.");
+        if (reason === "API_KEY_SERVICE_BLOCKED") throw new Error("Google Maps server key does not allow Places API (New). Enable it and add it to the server key's allowed APIs.");
+        throw new Error(`Google Maps location search failed (${res.status}). Check the connection and Places API access.`);
+      }
       // 4xx are permanent (key restrictions) — don't burn a retry silently.
       console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
       if (res.status >= 400 && res.status < 500) return null;
       throw new Error(`gateway ${res.status}`);
     }
     return res;
-  });
+  };
+  return strict ? request() : withRetry(`google ${path.split("?")[0]}`, 2, request);
 }
 
 async function fetchStaticMap(lat: number, lng: number, radius: number) {
@@ -317,7 +330,7 @@ async function fetchStaticMap(lat: number, lng: number, radius: number) {
   const res = await googleGateway(path);
   if (!res) return await fetchOsmStaticMap(lat, lng, zoom);
   const buf = await res.arrayBuffer();
-  return `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+  return { url: `data:image/png;base64,${Buffer.from(buf).toString("base64")}`, placement: { ...mapImagePlacement(lat, lng, zoom, 640), attribution: "© Google Maps" } };
 }
 
 /**
@@ -325,7 +338,7 @@ async function fetchStaticMap(lat: number, lng: number, radius: number) {
  * Google Static Maps API is unavailable for the configured key, so the officer
  * always sees a real map preview of the incident point.
  */
-async function fetchOsmStaticMap(lat: number, lng: number, zoom: number): Promise<string | null> {
+async function fetchOsmStaticMap(lat: number, lng: number, zoom: number) {
   try {
     const n = 2 ** zoom;
     const x = Math.floor(((lng + 180) / 360) * n);
@@ -336,7 +349,7 @@ async function fetchOsmStaticMap(lat: number, lng: number, zoom: number): Promis
     });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
-    return `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+    return { url: `data:image/png;base64,${Buffer.from(buf).toString("base64")}`, placement: { ...mapImagePlacement(lat, lng, zoom, 256, { x, y }), attribution: "© OpenStreetMap contributors" } };
   } catch {
     return null;
   }
@@ -359,7 +372,7 @@ export async function resolveExactPoint(lat: number, lng: number) {
     fetchReverseAddress(lat, lng).catch(() => null),
     fetchStaticMap(lat, lng, 250).catch(() => null),
   ]);
-  return { lat, lng, address, staticMapUrl };
+  return { lat, lng, address, staticMapUrl: staticMapUrl?.url ?? null };
 }
 
 async function fetchGooglePlaces(lat: number, lng: number, radius: number) {
@@ -668,7 +681,8 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
     fetchGooglePlaces(lat, lng, googleRadius).catch(() => []),
     fetchGoogleRoads(lat, lng, googleRadius).catch(() => []),
   ]);
-  scene.staticMapUrl = staticMapUrl;
+  scene.staticMapUrl = staticMapUrl?.url ?? null;
+  scene.staticMapPlacement = staticMapUrl?.placement;
   scene.address = address;
   scene.diagnostics.googlePlaces = googlePlaces.length;
   scene.diagnostics.googleRoadPoints = googleRoadPoints.length;
@@ -719,7 +733,7 @@ export async function placesAutocomplete(input: {
         "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text,suggestions.placePrediction.text.text",
     },
     body: JSON.stringify(body),
-  });
+  }, true);
   if (!res) return [];
   type S = { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } };
   const json = (await res.json().catch(() => null)) as { suggestions?: S[] } | null;
@@ -728,7 +742,7 @@ export async function placesAutocomplete(input: {
     .filter((p): p is NonNullable<S["placePrediction"]> => !!p?.placeId)
     .slice(0, 6)
     .map((p) => ({
-      placeId: p.placeId!,
+      placeId: p.placeId ?? "",
       primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
       secondary: p.structuredFormat?.secondaryText?.text ?? "",
     }));
@@ -738,14 +752,14 @@ export async function placeDetails(placeId: string, sessionToken?: string) {
   const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : "";
   const res = await googleGateway(`/places/v1/places/${encodeURIComponent(placeId)}${qs}`, {
     headers: { "X-Goog-FieldMask": "id,displayName,formattedAddress,location" },
-  });
+  }, true);
   if (!res) return null;
   const p = (await res.json().catch(() => null)) as {
     displayName?: { text?: string };
     formattedAddress?: string;
     location?: { latitude?: number; longitude?: number };
   } | null;
-  if (!p?.location?.latitude || !p.location.longitude) return null;
+  if (p?.location?.latitude === undefined || p.location.longitude === undefined) return null;
   return {
     name: p.displayName?.text ?? "",
     formattedAddress: p.formattedAddress ?? "",
