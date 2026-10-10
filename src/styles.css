@@ -974,7 +974,7 @@ button[role="combobox"]:focus {
 .light .min-h-screen { background-image: inherit; }
 
 /* Layered legacy important declarations otherwise outrank the theme overrides. */
-@layer utilities {
+@layer components {
   .light .glass-card,
   .light .glass-panel,
   .light .glass-input {
