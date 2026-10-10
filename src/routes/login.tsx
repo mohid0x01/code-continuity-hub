@@ -13,6 +13,10 @@ export const Route = createFileRoute("/login")({
     meta: [
       { title: "SuperAdmin Login — SCENEIQ" },
       { name: "description", content: "Government of Pakistan · SCENEIQ Admin Portal. Restricted access." },
+      { property: "og:title", content: "SuperAdmin Login — SCENEIQ" },
+      { property: "og:description", content: "Restricted sign-in for the SCENEIQ administration portal." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
 });

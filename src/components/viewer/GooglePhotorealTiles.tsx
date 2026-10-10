@@ -38,6 +38,7 @@ export function GooglePhotorealTiles({
 
   useEffect(() => {
     groundFound.current = false;
+    frame.current = 0;
     tiles.setCamera(camera);
     tiles.setResolutionFromRenderer(camera, gl);
     const handleErr = (e: { error?: Error }) => onError?.(e?.error?.message ?? "Google 3D tiles failed to load");
