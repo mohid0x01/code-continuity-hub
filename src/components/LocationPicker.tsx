@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { Button } from "@/components/ui/button";
 import { MapPin, Loader2, Crosshair } from "lucide-react";
 import { resolvePickedPoint, searchPlaces, getPlaceDetails } from "@/lib/location-scene.functions";
 
@@ -34,6 +36,11 @@ export function LocationPicker({
   onChange: (loc: PickedLocation | null) => void;
   initial?: Partial<PickedLocation>;
 }) {
+  const searchPlacesFn = useServerFn(searchPlaces);
+  const getPlaceDetailsFn = useServerFn(getPlaceDetails);
+  const resolvePointFn = useServerFn(resolvePickedPoint);
+  const [error, setError] = useState<string | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [cityInput, setCityInput] = useState(initial?.city ?? "");
   const [areaInput, setAreaInput] = useState(initial?.area ?? "");
@@ -67,26 +74,28 @@ export function LocationPicker({
 
   // Debounced city autocomplete
   useEffect(() => {
-    if (!ready || !cityInput || cityInput.length < 2) {
+    if (!ready || !cityInput || cityInput.length < 2 || cityInput === selectedCity?.name) {
       setCitySuggestions([]);
       return;
     }
+    let active = true;
     const handle = setTimeout(async () => {
+      setError(null);
       try {
-        const list = await searchPlaces({
+        const list = await searchPlacesFn({
           data: {
             input: cityInput,
             sessionToken: sessionRef.current,
             primaryTypes: ["locality", "administrative_area_level_2", "administrative_area_level_3"],
           },
         });
-        setCitySuggestions(list);
+        if (active) setCitySuggestions(list);
       } catch (err) {
-        console.error("City autocomplete", err);
+        if (active) setError(err instanceof Error ? err.message : "Location search unavailable. Please try again.");
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [cityInput, ready]);
+    }, 300);
+    return () => { active = false; clearTimeout(handle); };
+  }, [cityInput, ready, selectedCity, searchPlacesFn]);
 
   // Debounced area autocomplete biased to selected city
   useEffect(() => {
@@ -94,22 +103,24 @@ export function LocationPicker({
       setAreaSuggestions([]);
       return;
     }
+    let active = true;
     const handle = setTimeout(async () => {
+      setError(null);
       try {
-        const list = await searchPlaces({
+        const list = await searchPlacesFn({
           data: {
             input: areaInput,
             sessionToken: sessionRef.current,
             bias: { lat: selectedCity.lat, lng: selectedCity.lng, radius: 25000 },
           },
         });
-        setAreaSuggestions(list);
+        if (active) setAreaSuggestions(list);
       } catch (err) {
-        console.error("Area autocomplete", err);
+        if (active) setError(err instanceof Error ? err.message : "Location search unavailable. Please try again.");
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [areaInput, selectedCity, ready]);
+    }, 300);
+    return () => { active = false; clearTimeout(handle); };
+  }, [areaInput, selectedCity, ready, searchPlacesFn]);
 
   // Debounced street/landmark autocomplete — the "exact spot" tier.
   useEffect(() => {
@@ -117,21 +128,23 @@ export function LocationPicker({
       setSpotSuggestions([]);
       return;
     }
+    let active = true;
     const handle = setTimeout(async () => {
+      setError(null);
       try {
         const center = picked
           ? { lat: picked.latitude, lng: picked.longitude }
           : { lat: selectedCity.lat, lng: selectedCity.lng };
-        const list = await searchPlaces({
+        const list = await searchPlacesFn({
           data: { input: spotInput, sessionToken: sessionRef.current, bias: { ...center, radius: 12000 } },
         });
-        setSpotSuggestions(list);
+        if (active) setSpotSuggestions(list);
       } catch (err) {
-        console.error("Spot autocomplete", err);
+        if (active) setError(err instanceof Error ? err.message : "Location search unavailable. Please try again.");
       }
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [spotInput, selectedCity, picked, ready]);
+    }, 300);
+    return () => { active = false; clearTimeout(handle); };
+  }, [spotInput, selectedCity, picked, ready, searchPlacesFn]);
 
   /** Commits an exact coordinate: reverse-geocodes it server-side and pins the map. */
   const commitPoint = useCallback(
@@ -147,7 +160,7 @@ export function LocationPicker({
       setPicked(base);
       onChange(base);
       try {
-        const resolved = await resolvePickedPoint({ data: { lat, lng } });
+        const resolved = await resolvePointFn({ data: { lat, lng } });
         setSatUrl(resolved.staticMapUrl ?? null);
         if (resolved.address) {
           const next = { ...base, formattedAddress: resolved.address };
@@ -158,17 +171,24 @@ export function LocationPicker({
         console.warn("Reverse geocode failed", err);
       }
     },
-    [areaInput, onChange, selectedCity],
+    [areaInput, onChange, selectedCity, resolvePointFn],
   );
 
   // Interactive confirmation map with a draggable pin (exact lat/lng control).
   useEffect(() => {
     if (!ready || !picked || !mapRef.current) return;
     const center = { lat: picked.latitude, lng: picked.longitude };
+    let active = true;
     const run = async () => {
-      while (!window.google?.maps?.importLibrary) await new Promise((r) => setTimeout(r, 250));
+      setMapError(null);
+      const deadline = Date.now() + 10000;
+      while (!window.google?.maps?.importLibrary) {
+        if (!active) return;
+        if (Date.now() > deadline) throw new Error("Map preview unavailable. Your selected coordinates are still saved.");
+        await new Promise((r) => setTimeout(r, 250));
+      }
       await window.google.maps.importLibrary("maps");
-      await window.google.maps.importLibrary("marker");
+      if (!active) return;
       if (!mapObjRef.current) {
         mapObjRef.current = new window.google.maps.Map(mapRef.current, {
           center,
@@ -199,14 +219,15 @@ export function LocationPicker({
         markerRef.current?.setPosition(center);
       }
     };
-    void run();
+    void run().catch((err) => { if (active) setMapError(err instanceof Error ? err.message : "Map unavailable"); });
+    return () => { active = false; };
     // Only re-centre when the coordinate itself changes.
   }, [ready, picked?.latitude, picked?.longitude, commitPoint, picked]);
 
   const pickCity = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
       newSession();
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
@@ -219,10 +240,14 @@ export function LocationPicker({
       setCityInput(s.primary);
       setCitySuggestions([]);
       setAreaInput("");
+      setSpotInput("");
+      setAreaSuggestions([]);
+      setSpotSuggestions([]);
+      setSatUrl(null);
       setPicked(null);
       onChange(null);
     } catch (err) {
-      console.error("Fetch city details", err);
+      setError(err instanceof Error ? err.message : "Unable to select this location.");
     } finally {
       setLoading(false);
     }
@@ -232,7 +257,7 @@ export function LocationPicker({
     if (!selectedCity) return;
     setLoading(true);
     try {
-      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
       newSession();
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
@@ -249,7 +274,7 @@ export function LocationPicker({
       setPicked(next);
       onChange(next);
     } catch (err) {
-      console.error("Fetch area details", err);
+      setError(err instanceof Error ? err.message : "Unable to select this location.");
     } finally {
       setLoading(false);
     }
@@ -258,7 +283,7 @@ export function LocationPicker({
   const pickSpot = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const place = await getPlaceDetails({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
       newSession();
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
@@ -266,7 +291,7 @@ export function LocationPicker({
       setSpotSuggestions([]);
       await commitPoint(lat, lng, place.formattedAddress || s.primary, "exact");
     } catch (err) {
-      console.error("Fetch spot details", err);
+      setError(err instanceof Error ? err.message : "Unable to select this location.");
     } finally {
       setLoading(false);
     }
@@ -274,6 +299,7 @@ export function LocationPicker({
 
   return (
     <div className="space-y-4">
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {/* CITY */}
       <div className="relative">
         <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">
@@ -285,6 +311,12 @@ export function LocationPicker({
             value={cityInput}
             onChange={(e) => {
               setCityInput(e.target.value);
+              setCitySuggestions([]);
+              setAreaSuggestions([]);
+              setSpotSuggestions([]);
+              setAreaInput("");
+              setSpotInput("");
+              setSatUrl(null);
               setSelectedCity(null);
               setPicked(null);
               onChange(null);
@@ -302,17 +334,18 @@ export function LocationPicker({
             <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-[6px] border border-border-accent bg-card shadow-2xl">
               {citySuggestions.map((s) => (
                 <li key={s.placeId}>
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => pickCity(s)}
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                    className="h-auto w-full justify-start items-start gap-2 whitespace-normal px-3 py-2 text-left text-sm normal-case tracking-normal"
                   >
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold" />
                     <span>
                       <span className="text-text-primary">{s.primary}</span>
                       <span className="ml-1 text-xs text-text-muted">{s.secondary}</span>
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -344,17 +377,18 @@ export function LocationPicker({
             <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-[6px] border border-border-accent bg-card shadow-2xl">
               {areaSuggestions.map((s) => (
                 <li key={s.placeId}>
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => pickArea(s)}
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                    className="h-auto w-full justify-start items-start gap-2 whitespace-normal px-3 py-2 text-left text-sm normal-case tracking-normal"
                   >
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold" />
                     <span>
                       <span className="text-text-primary">{s.primary}</span>
                       <span className="ml-1 text-xs text-text-muted">{s.secondary}</span>
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -381,17 +415,18 @@ export function LocationPicker({
             <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-[6px] border border-border-accent bg-card shadow-2xl">
               {spotSuggestions.map((s) => (
                 <li key={s.placeId}>
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => pickSpot(s)}
-                    className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface"
+                    className="h-auto w-full justify-start items-start gap-2 whitespace-normal px-3 py-2 text-left text-sm normal-case tracking-normal"
                   >
                     <Crosshair className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold" />
                     <span>
                       <span className="text-text-primary">{s.primary}</span>
                       <span className="ml-1 text-xs text-text-muted">{s.secondary}</span>
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -416,6 +451,7 @@ export function LocationPicker({
               </div>
             </div>
           </div>
+          {mapError && <p role="status" className="text-xs text-text-secondary">{mapError}</p>}
           <div ref={mapRef} className="h-52 w-full overflow-hidden rounded-[6px] border border-border-subtle" />
           {satUrl && (
             <img

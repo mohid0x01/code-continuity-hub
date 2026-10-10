@@ -718,7 +718,7 @@
   --wg-hover-border: hsl(0 0% 100% / 22%);
 }
 
-/* Light = Grey textured + Green accents */
+/* Light = white, black text, neutral texture */
 .light {
   /* Pure white bg, light-grey glass boxes, full-black text */
   --background: hsl(0 0% 100%);
@@ -755,8 +755,8 @@
   --color-surface-elevated: hsl(0 0% 92% / 70%);
   --color-surface-overlay: hsl(0 0% 90% / 70%);
   --color-text-primary: hsl(0 0% 0%);
-  --color-text-secondary: hsl(0 0% 15%);
-  --color-text-muted: hsl(0 0% 40%);
+  --color-text-secondary: hsl(0 0% 0%);
+  --color-text-muted: hsl(0 0% 0%);
   --color-border-subtle: hsl(0 0% 88%);
   --color-border-accent: hsl(0 0% 75%);
   --wg-bg: hsl(0 0% 96% / 60%);
@@ -931,9 +931,9 @@ button[role="combobox"]:focus {
 .light [data-slot="select-content"] {
   color: hsl(0 0% 0%) !important;
 }
-.light .text-text-primary { color: hsl(0 0% 0%) !important; }
-.light .text-text-secondary { color: hsl(0 0% 20%) !important; }
-.light .text-text-muted { color: hsl(0 0% 40%) !important; }
+.light .text-text-primary { color: var(--foreground) !important; }
+.light .text-text-secondary { color: var(--foreground) !important; }
+.light .text-text-muted { color: var(--foreground) !important; }
 .light .bg-background\/80,
 .light .bg-background\/60 {
   background-color: hsl(0 0% 100% / 0.75) !important;
@@ -970,3 +970,5 @@ button[role="combobox"]:focus {
   background-color: hsl(152 60% 42% / 25%);
   color: hsl(160 10% 12%);
 }
+
+.light .min-h-screen { background-image: inherit; }
