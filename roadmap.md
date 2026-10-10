@@ -5,3 +5,7 @@
 - [x] AI mode: realistic AI re-enactment clip, stored in private storage, then shown in viewer
 - [x] SCENEIQ Engine: Google Photorealistic 3D city at incident point (fallback to map model)
 - [x] Place search moved server-side (browser Places stopped working); map functions sign-in only
+- [ ] Repair FIR location input states, stale searches, and map loading errors
+- [ ] Apply white background, black text, and neutral texture consistently
+- [ ] Keep real-location geometry and characters visible while Google 3D loads; handle missing coverage
+- [ ] Image-only exact 3D reconstruction: requires measured depth/geometry, not a single map photograph
