@@ -1016,4 +1016,14 @@ button[role="combobox"]:focus {
   .light :is(.icon-hover, .icon-glow-hover):hover {
     filter: none !important;
   }
+  .light :is(.text-gold, .text-gold-light, .text-gold-muted, .text-success, .text-processing, [class*="text-emerald-"], [class*="text-green-"]) {
+    color: var(--foreground) !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+  .light :is([class*="bg-emerald-"], [class*="bg-green-"]) {
+    background-color: var(--muted) !important;
+  }
+  .light :is([class*="border-emerald-"], [class*="border-green-"]) {
+    border-color: var(--border) !important;
+  }
 }
