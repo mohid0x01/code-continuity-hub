@@ -742,6 +742,9 @@
   --ring: hsl(0 0% 0%);
   --sidebar: hsl(0 0% 96% / 80%);
   --sidebar-foreground: hsl(0 0% 0%);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
   --sidebar-accent: hsl(0 0% 90%);
   --sidebar-accent-foreground: hsl(0 0% 0%);
   --sidebar-border: hsl(0 0% 85%);
@@ -751,6 +754,24 @@
   --color-gold-dim: hsl(0 0% 0% / 40%);
   --color-platinum: hsl(0 0% 0%);
   --color-ice: hsl(0 0% 0%);
+  --color-success: var(--foreground);
+  --color-processing: var(--foreground);
+  --color-green-accent: var(--foreground);
+  --color-green-dark: var(--foreground);
+  --color-green-shiny: var(--foreground);
+  --color-emerald-300: var(--foreground);
+  --color-emerald-400: var(--foreground);
+  --color-emerald-500: var(--foreground);
+  --color-emerald-600: var(--foreground);
+  --color-green-300: var(--foreground);
+  --color-green-400: var(--foreground);
+  --color-green-500: var(--foreground);
+  --color-green-600: var(--foreground);
+  --chart-1: hsl(0 0% 10%);
+  --chart-2: hsl(0 0% 32%);
+  --chart-3: hsl(0 0% 48%);
+  --chart-4: hsl(0 0% 65%);
+  --chart-5: hsl(0 0% 80%);
   --color-surface: hsl(0 0% 94% / 65%);
   --color-surface-elevated: hsl(0 0% 92% / 70%);
   --color-surface-overlay: hsl(0 0% 90% / 70%);
@@ -967,8 +988,8 @@ button[role="combobox"]:focus {
   color: var(--foreground);
 }
 .light ::selection {
-  background-color: hsl(152 60% 42% / 25%);
-  color: hsl(160 10% 12%);
+  background-color: var(--border);
+  color: var(--foreground);
 }
 
 .light .min-h-screen { background-image: inherit; }
@@ -982,5 +1003,17 @@ button[role="combobox"]:focus {
     color: var(--foreground) !important;
     border-color: var(--wg-border) !important;
     box-shadow: var(--wg-shadow) !important;
+  }
+  .light .glass-button-primary {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    border-color: var(--primary) !important;
+    box-shadow: none !important;
+  }
+  .light :is(input, textarea, select, .glass-input, [role="combobox"]):focus {
+    box-shadow: 0 0 0 3px var(--border) !important;
+  }
+  .light :is(.icon-hover, .icon-glow-hover):hover {
+    filter: none !important;
   }
 }

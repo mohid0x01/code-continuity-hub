@@ -6,6 +6,8 @@
 - [x] SCENEIQ Engine: Google Photorealistic 3D city at incident point (fallback to map model)
 - [x] Place search moved server-side (browser Places stopped working); map functions sign-in only
 - [x] Repair FIR location input states, stale searches, and map loading errors
+- [x] Use saved GOOGLE_API_KEY for authenticated Maps data requests without requiring connector gateway credentials
+- [x] Remove green text and accents from the white theme, retaining neutral monochrome controls
 - [x] Apply white background, black text, and neutral texture consistently
 - [x] Keep real-location geometry and characters visible while Google 3D loads; handle missing coverage
 - [ ] Live location search / Google 3D verification: user must sign in and validate on an authorized deployed origin
