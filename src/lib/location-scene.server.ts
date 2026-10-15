@@ -355,10 +355,9 @@ async function fetchOsmStaticMap(lat: number, lng: number, zoom: number) {
 }
 
 async function fetchReverseAddress(lat: number, lng: number) {
-  const res = await googleGateway(`/maps/api/geocode/json?latlng=${lat},${lng}`);
-  if (!res) return null;
-  const json = await res.json().catch(() => null) as { results?: Array<{ formatted_address?: string }> } | null;
-  return json?.results?.[0]?.formatted_address ?? null;
+  const res = await googleGateway(`/maps/api/geocode/json?latlng=${lat},${lng}`).catch(() => null);
+  const json = res ? await res.json().catch(() => null) as { results?: Array<{ formatted_address?: string }> } | null : null;
+  return json?.results?.[0]?.formatted_address ?? (await nominatimReverse(lat, lng));
 }
 
 /**
@@ -732,11 +731,11 @@ export async function placesAutocomplete(input: {
         "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text,suggestions.placePrediction.text.text",
     },
     body: JSON.stringify(body),
-  }, true);
-  if (!res) return [];
+  }).catch(() => null);
+  if (!res) return photonSearch(input.input, input.bias);
   type S = { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } };
   const json = (await res.json().catch(() => null)) as { suggestions?: S[] } | null;
-  return (json?.suggestions ?? [])
+  const google = (json?.suggestions ?? [])
     .map((s) => s.placePrediction)
     .filter((p): p is NonNullable<S["placePrediction"]> => !!p?.placeId)
     .slice(0, 6)
@@ -745,9 +744,46 @@ export async function placesAutocomplete(input: {
       primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
       secondary: p.structuredFormat?.secondaryText?.text ?? "",
     }));
+  return google.length ? google : photonSearch(input.input, input.bias);
+}
+
+/** Free OpenStreetMap search (Photon) — works without any Google key. */
+async function photonSearch(q: string, bias?: { lat: number; lng: number }) {
+  const url = new URL("https://photon.komoot.io/api/");
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", "6");
+  url.searchParams.set("bbox", "60.8,23.6,77.9,37.1"); // Pakistan
+  if (bias) { url.searchParams.set("lat", String(bias.lat)); url.searchParams.set("lon", String(bias.lng)); }
+  const res = await fetch(url, { headers: { "User-Agent": OVERPASS_UA } }).catch(() => null);
+  if (!res?.ok) throw new Error("Location search unavailable. Please try again.");
+  type F = { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | undefined> };
+  const json = (await res.json().catch(() => null)) as { features?: F[] } | null;
+  return (json?.features ?? []).flatMap((f) => {
+    const c = f.geometry?.coordinates; const pr = f.properties ?? {};
+    const primary = pr.name || pr.street || pr.city;
+    if (!c || !primary) return [];
+    const secondary = [pr.district, pr.city !== primary ? pr.city : undefined, pr.state, pr.country].filter(Boolean).join(", ");
+    const label = `${primary}${secondary ? ", " + secondary : ""}`.slice(0, 200);
+    return [{ placeId: `osm:${c[1]},${c[0]}:${encodeURIComponent(label)}`.slice(0, 300), primary, secondary }];
+  });
+}
+
+async function nominatimReverse(lat: number, lng: number) {
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`, {
+    headers: { "User-Agent": OVERPASS_UA },
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const j = (await res.json().catch(() => null)) as { display_name?: string } | null;
+  return j?.display_name ?? null;
 }
 
 export async function placeDetails(placeId: string, sessionToken?: string) {
+  if (placeId.startsWith("osm:")) {
+    const m = /^osm:(-?[\d.]+),(-?[\d.]+):(.*)$/.exec(placeId);
+    if (!m) return null;
+    const label = (() => { try { return decodeURIComponent(m[3]); } catch { return m[3]; } })();
+    return { name: label.split(",")[0], formattedAddress: label, lat: Number(m[1]), lng: Number(m[2]) };
+  }
   const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : "";
   const res = await googleGateway(`/places/v1/places/${encodeURIComponent(placeId)}${qs}`, {
     headers: { "X-Goog-FieldMask": "id,displayName,formattedAddress,location" },
