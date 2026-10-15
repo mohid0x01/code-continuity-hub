@@ -1,4 +1,6 @@
 import { mapImagePlacement } from "./map-image";
+import { createServerOnlyFn } from "@tanstack/react-start";
+import { googleMapsRequest } from "./google-maps-request";
 export interface RealWorldScene {
   anchor: { lat: number; lng: number };
   buildings: {
@@ -287,21 +289,18 @@ async function overpassQuery(body: string): Promise<{ elements?: OverpassElement
   return null;
 }
 
-async function googleGateway(path: string, init?: RequestInit, strict = false) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!lovableKey || !mapsKey) {
-    if (strict) throw new Error("Google Maps connection is not configured. Please connect Google Maps in project settings.");
+const googleGateway = createServerOnlyFn(async (path: string, init?: RequestInit, strict = false) => {
+  const configured = googleMapsRequest(path, {
+    providerKey: process.env['GOOGLE_API_KEY'],
+    connectorKey: process.env['GOOGLE_MAPS_API_KEY'],
+    lovableKey: process.env['LOVABLE_API_KEY'],
+  }, init);
+  if (!configured) {
+    if (strict) throw new Error("Google Maps credentials are unavailable on this deployment. Configure GOOGLE_API_KEY or link the Google Maps connection, then redeploy.");
     return null;
   }
-  const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${lovableKey}`);
-  headers.set("X-Connection-Api-Key", mapsKey);
   const request = async () => {
-    const res = await fetch(`https://connector-gateway.lovable.dev/google_maps${path}`, {
-      ...init,
-      headers,
-    });
+    const res = await fetch(configured.url, configured.init);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       if (strict) {
@@ -309,7 +308,7 @@ async function googleGateway(path: string, init?: RequestInit, strict = false) {
         try { reason = JSON.parse(body)?.error?.details?.find((d: { reason?: string }) => d.reason)?.reason; } catch { /* non-JSON error */ }
         if (reason === "API_KEY_HTTP_REFERRER_BLOCKED") throw new Error("Google Maps server key is referrer-restricted. Set its application restrictions to None or IP addresses in Google Cloud Console.");
         if (reason === "API_KEY_SERVICE_BLOCKED") throw new Error("Google Maps server key does not allow Places API (New). Enable it and add it to the server key's allowed APIs.");
-        throw new Error(`Google Maps location search failed (${res.status}). Check the connection and Places API access.`);
+        throw new Error(`Google Maps request failed [${res.status}]: ${body.slice(0, 1000)}`);
       }
       // 4xx are permanent (key restrictions) — don't burn a retry silently.
       console.warn(`Google Maps gateway ${path} failed [${res.status}]: ${body.slice(0, 240)}`);
@@ -319,7 +318,7 @@ async function googleGateway(path: string, init?: RequestInit, strict = false) {
     return res;
   };
   return strict ? request() : withRetry(`google ${path.split("?")[0]}`, 2, request);
-}
+});
 
 async function fetchStaticMap(lat: number, lng: number, radius: number) {
   const zoom = radius <= 350 ? 18 : radius <= 800 ? 17 : radius <= 1600 ? 16 : 15;
