@@ -47,6 +47,22 @@ const PLACE_DB: Record<string, [number, number]> = {
   gilgit: [35.9208, 74.3144], skardu: [35.2971, 75.6333], hunza: [36.3167, 74.6500],
 };
 
+export function searchKnownPakistanCities(queryText: string) {
+  const query = queryText.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim().replace(/\s+/g, " ");
+  if (!query) return [];
+
+  return Object.entries(PLACE_DB)
+    .filter(([name]) => query.includes(name) || name.startsWith(query))
+    .slice(0, 6)
+    .map(([name, [lat, lng]]) => ({
+      placeId: `pkcity:${name}`,
+      primary: name.replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      secondary: "Pakistan",
+      lat,
+      lng,
+    }));
+}
+
 export interface GeocodeOptions {
   /** The primary FIR location picked by the officer (exact lat/lng). Always pinned first. */
   primary?: { label: string; lat: number; lng: number; description?: string } | null;

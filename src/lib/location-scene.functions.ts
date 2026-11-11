@@ -36,7 +36,6 @@ export const resolvePickedPoint = createServerFn({ method: "POST" })
 
 const autocompleteSchema = z.object({
   input: z.string().trim().min(2).max(120),
-  sessionToken: z.string().uuid(),
   bias: z
     .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), radius: z.number().min(100).max(50000) })
     .optional(),
@@ -54,9 +53,9 @@ export const searchPlaces = createServerFn({ method: "POST" })
 export const getPlaceDetails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
-    z.object({ placeId: z.string().min(3).max(300), sessionToken: z.string().uuid().optional() }).parse(data),
+    z.object({ placeId: z.string().min(3).max(300) }).parse(data),
   )
   .handler(async ({ data }) => {
     const { placeDetails } = await import("./location-scene.server");
-    return placeDetails(data.placeId, data.sessionToken);
+    return placeDetails(data.placeId);
   });

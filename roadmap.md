@@ -1,3 +1,4 @@
+- [x] Fix FIR location picker without Google APIs using Pakistani city matches, OpenStreetMap geocoding fallback, and an interactive OpenStreetMap pin.
 - [ ] Fix login "Invalid supabaseUrl" on Vercel: VITE_SUPABASE_URL must be a full https:// URL (env guide correction + redeploy)
 - [x] Single SuperAdmin login only (self-registration removed, sign-ups disabled)
 - [x] Proofs uploaded with FIR at submission

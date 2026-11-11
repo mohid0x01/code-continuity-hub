@@ -5,11 +5,6 @@ import { MapPin, Loader2, Crosshair } from "lucide-react";
 import { resolvePickedPoint, searchPlaces, getPlaceDetails } from "@/lib/location-scene.functions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
 
 export type PickedLocation = {
   city: string;
@@ -27,7 +22,7 @@ type Suggestion = { placeId: string; primary: string; secondary: string };
  * Cascading Pakistan location picker:
  *  1. City / District autocomplete (restricted to PK, admin level)
  *  2. Area / Locality autocomplete biased to that city
- * Place search runs on the server (Places API New); the browser only renders the map.
+ * Search runs through authenticated OpenStreetMap geocoding; the picker map uses OSM tiles.
  */
 export function LocationPicker({
   onChange,
@@ -57,20 +52,14 @@ export function LocationPicker({
   const [spotInput, setSpotInput] = useState("");
   const [spotSuggestions, setSpotSuggestions] = useState<Suggestion[]>([]);
   const [satUrl, setSatUrl] = useState<string | null>(null);
-  const sessionRef = useRef<any>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
   // Places search is server-side, so inputs are usable immediately.
   useEffect(() => {
-    sessionRef.current = crypto.randomUUID();
     setReady(true);
   }, []);
-
-  const newSession = () => {
-    sessionRef.current = crypto.randomUUID();
-  };
 
   // Debounced city autocomplete
   useEffect(() => {
@@ -85,7 +74,6 @@ export function LocationPicker({
         const list = await searchPlacesFn({
           data: {
             input: cityInput,
-            sessionToken: sessionRef.current,
             primaryTypes: ["locality", "administrative_area_level_2", "administrative_area_level_3"],
           },
         });
@@ -110,7 +98,6 @@ export function LocationPicker({
         const list = await searchPlacesFn({
           data: {
             input: areaInput,
-            sessionToken: sessionRef.current,
             bias: { lat: selectedCity.lat, lng: selectedCity.lng, radius: 25000 },
           },
         });
@@ -136,7 +123,7 @@ export function LocationPicker({
           ? { lat: picked.latitude, lng: picked.longitude }
           : { lat: selectedCity.lat, lng: selectedCity.lng };
         const list = await searchPlacesFn({
-          data: { input: spotInput, sessionToken: sessionRef.current, bias: { ...center, radius: 12000 } },
+          data: { input: spotInput, bias: { ...center, radius: 12000 } },
         });
         if (active) setSpotSuggestions(list);
       } catch (err) {
@@ -174,61 +161,53 @@ export function LocationPicker({
     [areaInput, onChange, selectedCity, resolvePointFn],
   );
 
-  // Interactive confirmation map with a draggable pin (exact lat/lng control).
+  // Interactive OpenStreetMap preview with a draggable pin (exact lat/lng control).
   useEffect(() => {
     if (!ready || !picked || !mapRef.current) return;
     const center = { lat: picked.latitude, lng: picked.longitude };
     let active = true;
     const run = async () => {
       setMapError(null);
-      const deadline = Date.now() + 10000;
-      while (!window.google?.maps?.importLibrary) {
-        if (!active) return;
-        if (Date.now() > deadline) throw new Error("Map preview unavailable. Your selected coordinates are still saved.");
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      await window.google.maps.importLibrary("maps");
+      const leaflet = await import("leaflet");
+      await import("leaflet/dist/leaflet.css");
       if (!active) return;
       if (!mapObjRef.current) {
-        mapObjRef.current = new window.google.maps.Map(mapRef.current, {
-          center,
-          zoom: 17,
-          mapTypeId: "hybrid",
-          clickableIcons: false,
-          disableDefaultUI: true,
-          zoomControl: true,
-        });
-        markerRef.current = new window.google.maps.Marker({
-          map: mapObjRef.current,
-          position: center,
-          draggable: true,
-        });
-        markerRef.current.addListener("dragend", (e: any) => {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
+        mapObjRef.current = leaflet.map(mapRef.current, { zoomControl: true }).setView([center.lat, center.lng], 17);
+        leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }).addTo(mapObjRef.current);
+        markerRef.current = leaflet.marker([center.lat, center.lng], { draggable: true }).addTo(mapObjRef.current);
+        markerRef.current.on("dragend", () => {
+          const point = markerRef.current?.getLatLng();
+          if (!point) return;
+          const { lat, lng } = point;
           void commitPoint(lat, lng, "Pin adjusted by officer", "exact");
         });
-        mapObjRef.current.addListener("click", (e: any) => {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
-          markerRef.current.setPosition({ lat, lng });
+        mapObjRef.current.on("click", (event: { latlng: { lat: number; lng: number } }) => {
+          const { lat, lng } = event.latlng;
+          markerRef.current.setLatLng([lat, lng]);
           void commitPoint(lat, lng, "Pin adjusted by officer", "exact");
         });
       } else {
-        mapObjRef.current.setCenter(center);
-        markerRef.current?.setPosition(center);
+        mapObjRef.current.setView([center.lat, center.lng], 17);
+        markerRef.current?.setLatLng([center.lat, center.lng]);
+        window.setTimeout(() => mapObjRef.current?.invalidateSize(), 0);
       }
     };
-    void run().catch((err) => { if (active) setMapError(err instanceof Error ? err.message : "Map unavailable"); });
+    void run().catch((err) => {
+      if (active) setMapError(err instanceof Error ? err.message : "Free map preview unavailable. Your selected coordinates are still saved.");
+    });
     return () => { active = false; };
     // Only re-centre when the coordinate itself changes.
   }, [ready, picked?.latitude, picked?.longitude, commitPoint, picked]);
 
+  useEffect(() => () => mapObjRef.current?.remove?.(), []);
+
   const pickCity = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
-      newSession();
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId } });
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
       setSelectedCity({
@@ -257,8 +236,7 @@ export function LocationPicker({
     if (!selectedCity) return;
     setLoading(true);
     try {
-      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
-      newSession();
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId } });
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
       const next: PickedLocation = {
@@ -283,8 +261,7 @@ export function LocationPicker({
   const pickSpot = async (s: Suggestion) => {
     setLoading(true);
     try {
-      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId, sessionToken: sessionRef.current } });
-      newSession();
+      const place = await getPlaceDetailsFn({ data: { placeId: s.placeId } });
       if (!place) throw new Error("Place details unavailable");
       const { lat, lng } = place;
       setSpotInput(s.primary);
@@ -321,7 +298,7 @@ export function LocationPicker({
               setPicked(null);
               onChange(null);
             }}
-            placeholder={ready ? "e.g. Karachi, Lahore, Khairpur" : "Loading Google Maps…"}
+            placeholder={ready ? "e.g. Karachi, Lahore, Khairpur" : "Preparing location search…"}
             disabled={!ready}
             className="glass-input w-full rounded-[6px] px-4 py-3 pr-10 text-sm placeholder:text-text-muted"
           />

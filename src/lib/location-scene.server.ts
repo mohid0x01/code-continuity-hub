@@ -1,6 +1,7 @@
 import { mapImagePlacement } from "./map-image";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { googleMapsRequest } from "./google-maps-request";
+import { searchKnownPakistanCities } from "./geocode";
 export interface RealWorldScene {
   anchor: { lat: number; lng: number };
   buildings: {
@@ -321,15 +322,8 @@ const googleGateway = createServerOnlyFn(async (path: string, init?: RequestInit
 });
 
 async function fetchStaticMap(lat: number, lng: number, radius: number) {
-  const zoom = radius <= 350 ? 18 : radius <= 800 ? 17 : radius <= 1600 ? 16 : 15;
-  const path =
-    `/maps/api/staticmap?center=${lat},${lng}` +
-    `&zoom=${zoom}&size=640x640&scale=2&maptype=hybrid` +
-    `&markers=color:red%7C${lat},${lng}`;
-  const res = await googleGateway(path);
-  if (!res) return await fetchOsmStaticMap(lat, lng, zoom);
-  const buf = await res.arrayBuffer();
-  return { url: `data:image/png;base64,${Buffer.from(buf).toString("base64")}`, placement: { ...mapImagePlacement(lat, lng, zoom, 640), attribution: "© Google Maps" } };
+  void radius;
+  return fetchOsmStaticMap(lat, lng, 18);
 }
 
 /**
@@ -355,9 +349,7 @@ async function fetchOsmStaticMap(lat: number, lng: number, zoom: number) {
 }
 
 async function fetchReverseAddress(lat: number, lng: number) {
-  const res = await googleGateway(`/maps/api/geocode/json?latlng=${lat},${lng}`).catch(() => null);
-  const json = res ? await res.json().catch(() => null) as { results?: Array<{ formatted_address?: string }> } | null : null;
-  return json?.results?.[0]?.formatted_address ?? (await nominatimReverse(lat, lng));
+  return nominatimReverse(lat, lng);
 }
 
 /**
