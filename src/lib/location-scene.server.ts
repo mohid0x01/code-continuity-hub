@@ -695,48 +695,36 @@ async function buildRealWorldSceneUncached(input: { lat: number; lng: number; ra
   return scene;
 }
 // ---------------------------------------------------------------------------
-// Places (New) proxied through the backend — the browser key no longer
-// authorises Places, so the picker calls these via authenticated server fns.
+// Google-independent location lookup for the authenticated FIR location picker.
 // ---------------------------------------------------------------------------
 export async function placesAutocomplete(input: {
   input: string;
-  sessionToken: string;
   bias?: { lat: number; lng: number; radius: number };
   primaryTypes?: string[];
 }) {
-  const body: Record<string, unknown> = {
-    input: input.input,
-    sessionToken: input.sessionToken,
-    includedRegionCodes: ["pk"],
-  };
-  if (input.primaryTypes?.length) body.includedPrimaryTypes = input.primaryTypes;
-  if (input.bias) {
-    body.locationBias = {
-      circle: { center: { latitude: input.bias.lat, longitude: input.bias.lng }, radius: input.bias.radius },
-    };
+  const localCities = input.primaryTypes?.length ? searchKnownPakistanCities(input.input) : [];
+  let osmSuggestions: Awaited<ReturnType<typeof photonSearch>> = [];
+  try {
+    osmSuggestions = await photonSearch(input.input, input.bias);
+  } catch (photonError) {
+    console.warn("OpenStreetMap location search unavailable; trying backup geocoder", photonError);
   }
-  const res = await googleGateway("/places/v1/places:autocomplete", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-FieldMask":
-        "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text,suggestions.placePrediction.text.text",
-    },
-    body: JSON.stringify(body),
-  }).catch(() => null);
-  if (!res) return photonSearch(input.input, input.bias);
-  type S = { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } };
-  const json = (await res.json().catch(() => null)) as { suggestions?: S[] } | null;
-  const google = (json?.suggestions ?? [])
-    .map((s) => s.placePrediction)
-    .filter((p): p is NonNullable<S["placePrediction"]> => !!p?.placeId)
-    .slice(0, 6)
-    .map((p) => ({
-      placeId: p.placeId ?? "",
-      primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
-      secondary: p.structuredFormat?.secondaryText?.text ?? "",
-    }));
-  return google.length ? google : photonSearch(input.input, input.bias);
+  if (!osmSuggestions.length) {
+    try {
+      osmSuggestions = await nominatimSearch(input.input, input.bias);
+    } catch (nominatimError) {
+      console.warn("Backup location search unavailable", nominatimError);
+    }
+  }
+  const seen = new Set<string>();
+  return [...localCities, ...osmSuggestions]
+    .filter((suggestion) => {
+      const key = suggestion.primary.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
 }
 
 /** Free OpenStreetMap search (Photon) — works without any Google key. */
@@ -746,17 +734,69 @@ async function photonSearch(q: string, bias?: { lat: number; lng: number }) {
   url.searchParams.set("limit", "6");
   url.searchParams.set("bbox", "60.8,23.6,77.9,37.1"); // Pakistan
   if (bias) { url.searchParams.set("lat", String(bias.lat)); url.searchParams.set("lon", String(bias.lng)); }
-  const res = await fetch(url, { headers: { "User-Agent": OVERPASS_UA } }).catch(() => null);
-  if (!res?.ok) throw new Error("Location search unavailable. Please try again.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { "User-Agent": OVERPASS_UA }, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) throw new Error(`OpenStreetMap search returned ${res.status}`);
   type F = { geometry?: { coordinates?: [number, number] }; properties?: Record<string, string | undefined> };
   const json = (await res.json().catch(() => null)) as { features?: F[] } | null;
   return (json?.features ?? []).flatMap((f) => {
     const c = f.geometry?.coordinates; const pr = f.properties ?? {};
     const primary = pr.name || pr.street || pr.city;
     if (!c || !primary) return [];
+    if (c[1] < 23 || c[1] > 38 || c[0] < 60 || c[0] > 79) return [];
     const secondary = [pr.district, pr.city !== primary ? pr.city : undefined, pr.state, pr.country].filter(Boolean).join(", ");
-    const label = `${primary}${secondary ? ", " + secondary : ""}`.slice(0, 200);
-    return [{ placeId: `osm:${c[1]},${c[0]}:${encodeURIComponent(label)}`.slice(0, 300), primary, secondary }];
+    const label = `${primary}${secondary ? ", " + secondary : ""}`.slice(0, 120);
+    return [{ placeId: `osm:${c[1]},${c[0]}:${encodeURIComponent(label)}`, primary, secondary }];
+  });
+}
+
+async function nominatimSearch(q: string, bias?: { lat: number; lng: number; radius: number }) {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", `${q}, Pakistan`);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("countrycodes", "pk");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("namedetails", "1");
+  url.searchParams.set("limit", "6");
+  if (bias) {
+    const delta = Math.min(Math.max(bias.radius / 111000, 0.01), 0.45);
+    url.searchParams.set("viewbox", `${bias.lng - delta},${bias.lat + delta},${bias.lng + delta},${bias.lat - delta}`);
+    url.searchParams.set("bounded", "1");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { "User-Agent": OVERPASS_UA, Accept: "application/json" }, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) throw new Error(`Backup geocoder returned ${res.status}`);
+  type Result = {
+    lat?: string;
+    lon?: string;
+    name?: string;
+    namedetails?: { name?: string };
+    address?: Record<string, string | undefined>;
+  };
+  const results = await res.json() as Result[];
+  return results.flatMap((result) => {
+    const lat = Number(result.lat);
+    const lng = Number(result.lon);
+    const address = result.address ?? {};
+    const primary = result.namedetails?.name || result.name || address.road || address.suburb || address.city || address.town || address.village || address.county;
+    if (!primary || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < 23 || lat > 38 || lng < 60 || lng > 79) return [];
+    const secondary = [address.neighbourhood, address.suburb, address.city_district, address.city || address.town || address.village, address.state]
+      .filter((part, index, parts): part is string => !!part && part.toLowerCase() !== primary.toLowerCase() && parts.indexOf(part) === index)
+      .join(", ");
+    const label = `${primary}${secondary ? `, ${secondary}` : ""}`.slice(0, 120);
+    return [{ placeId: `osm:${lat},${lng}:${encodeURIComponent(label)}`, primary, secondary }];
   });
 }
 
@@ -769,28 +809,21 @@ async function nominatimReverse(lat: number, lng: number) {
   return j?.display_name ?? null;
 }
 
-export async function placeDetails(placeId: string, sessionToken?: string) {
+export async function placeDetails(placeId: string) {
+  if (placeId.startsWith("pkcity:")) {
+    const cityName = placeId.slice("pkcity:".length);
+    const city = searchKnownPakistanCities(cityName).find((item) => item.placeId === placeId);
+    if (!city) return null;
+    return { name: city.primary, formattedAddress: `${city.primary}, Pakistan`, lat: city.lat, lng: city.lng };
+  }
   if (placeId.startsWith("osm:")) {
     const m = /^osm:(-?[\d.]+),(-?[\d.]+):(.*)$/.exec(placeId);
     if (!m) return null;
     const label = (() => { try { return decodeURIComponent(m[3]); } catch { return m[3]; } })();
-    return { name: label.split(",")[0], formattedAddress: label, lat: Number(m[1]), lng: Number(m[2]) };
+    const lat = Number(m[1]);
+    const lng = Number(m[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 23 || lat > 38 || lng < 60 || lng > 79) return null;
+    return { name: label.split(",")[0], formattedAddress: label, lat, lng };
   }
-  const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : "";
-  const res = await googleGateway(`/places/v1/places/${encodeURIComponent(placeId)}${qs}`, {
-    headers: { "X-Goog-FieldMask": "id,displayName,formattedAddress,location" },
-  }, true);
-  if (!res) return null;
-  const p = (await res.json().catch(() => null)) as {
-    displayName?: { text?: string };
-    formattedAddress?: string;
-    location?: { latitude?: number; longitude?: number };
-  } | null;
-  if (p?.location?.latitude === undefined || p.location.longitude === undefined) return null;
-  return {
-    name: p.displayName?.text ?? "",
-    formattedAddress: p.formattedAddress ?? "",
-    lat: p.location.latitude,
-    lng: p.location.longitude,
-  };
+  return null;
 }

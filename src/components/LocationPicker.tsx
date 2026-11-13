@@ -164,6 +164,7 @@ export function LocationPicker({
   // Interactive OpenStreetMap preview with a draggable pin (exact lat/lng control).
   useEffect(() => {
     if (!ready || !picked || !mapRef.current) return;
+    const mapContainer = mapRef.current;
     const center = { lat: picked.latitude, lng: picked.longitude };
     let active = true;
     const run = async () => {
@@ -172,7 +173,7 @@ export function LocationPicker({
       await import("leaflet/dist/leaflet.css");
       if (!active) return;
       if (!mapObjRef.current) {
-        mapObjRef.current = leaflet.map(mapRef.current, { zoomControl: true }).setView([center.lat, center.lng], 17);
+        mapObjRef.current = leaflet.map(mapContainer, { zoomControl: true }).setView([center.lat, center.lng], 17);
         leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -223,8 +224,16 @@ export function LocationPicker({
       setAreaSuggestions([]);
       setSpotSuggestions([]);
       setSatUrl(null);
-      setPicked(null);
-      onChange(null);
+      const cityLocation: PickedLocation = {
+        city: s.primary,
+        area: s.primary,
+        formattedAddress: place.formattedAddress || `${s.primary}, Pakistan`,
+        latitude: lat,
+        longitude: lng,
+        precision: "city",
+      };
+      setPicked(cityLocation);
+      onChange(cityLocation);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to select this location.");
     } finally {
@@ -341,8 +350,6 @@ export function LocationPicker({
             value={areaInput}
             onChange={(e) => {
               setAreaInput(e.target.value);
-              setPicked(null);
-              onChange(null);
             }}
             placeholder={
               selectedCity ? `Search areas in ${selectedCity.name}…` : "Pick a city first"
