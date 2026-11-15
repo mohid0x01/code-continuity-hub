@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardArchiveRouteImport } from './routes/dashboard/archive'
 import { Route as DashboardAuditRouteImport } from './routes/dashboard/audit'
@@ -20,6 +22,7 @@ import { Route as DashboardReconstructionsRouteImport } from './routes/dashboard
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardSubmitRouteImport } from './routes/dashboard/submit'
 import { Route as DashboardViewerRouteImport } from './routes/dashboard/viewer'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiProxySplatRouteImport } from './routes/api/proxy/$'
 import { Route as ApiPublicVisitorRouteImport } from './routes/api/public/visitor'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
@@ -39,6 +42,17 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -80,6 +94,11 @@ const DashboardViewerRoute = DashboardViewerRouteImport.update({
   path: '/viewer',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProxySplatRoute = ApiProxySplatRouteImport.update({
   id: '/api/proxy/$',
   path: '/api/proxy/$',
@@ -100,6 +119,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
@@ -108,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
   '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -115,6 +137,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
@@ -123,6 +147,7 @@ export interface FileRoutesByTo {
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
   '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -132,6 +157,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/dashboard/archive': typeof DashboardArchiveRoute
   '/dashboard/audit': typeof DashboardAuditRoute
   '/dashboard/processing': typeof DashboardProcessingRoute
@@ -140,6 +167,7 @@ export interface FileRoutesById {
   '/dashboard/submit': typeof DashboardSubmitRoute
   '/dashboard/viewer': typeof DashboardViewerRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/api/proxy/$': typeof ApiProxySplatRoute
   '/api/public/visitor': typeof ApiPublicVisitorRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -150,6 +178,8 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/mcp'
+    | '/.well-known/oauth-protected-resource'
     | '/dashboard/archive'
     | '/dashboard/audit'
     | '/dashboard/processing'
@@ -158,6 +188,7 @@ export interface FileRouteTypes {
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard/'
+    | '/.lovable/oauth/consent'
     | '/api/proxy/$'
     | '/api/public/visitor'
     | '/api/v1/$'
@@ -165,6 +196,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/mcp'
+    | '/.well-known/oauth-protected-resource'
     | '/dashboard/archive'
     | '/dashboard/audit'
     | '/dashboard/processing'
@@ -173,6 +206,7 @@ export interface FileRouteTypes {
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard'
+    | '/.lovable/oauth/consent'
     | '/api/proxy/$'
     | '/api/public/visitor'
     | '/api/v1/$'
@@ -181,6 +215,8 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/login'
+    | '/mcp'
+    | '/.well-known/oauth-protected-resource'
     | '/dashboard/archive'
     | '/dashboard/audit'
     | '/dashboard/processing'
@@ -189,6 +225,7 @@ export interface FileRouteTypes {
     | '/dashboard/submit'
     | '/dashboard/viewer'
     | '/dashboard/'
+    | '/.lovable/oauth/consent'
     | '/api/proxy/$'
     | '/api/public/visitor'
     | '/api/v1/$'
@@ -198,6 +235,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiProxySplatRoute: typeof ApiProxySplatRoute
   ApiPublicVisitorRoute: typeof ApiPublicVisitorRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
@@ -224,6 +264,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -282,6 +336,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardViewerRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/proxy/$': {
       id: '/api/proxy/$'
       path: '/api/proxy/$'
@@ -336,6 +397,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
   LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiProxySplatRoute: ApiProxySplatRoute,
   ApiPublicVisitorRoute: ApiPublicVisitorRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,

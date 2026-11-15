@@ -10,6 +10,8 @@ import { PipelineAttemptsLog } from "@/components/dashboard/PipelineAttemptsLog"
 import { useServerFn } from "@tanstack/react-start";
 import { cancelJob, retryJob, runMockPipeline } from "@/lib/fir.functions";
 import { toast } from "sonner";
+import { useWebMCP } from "use-webmcp-tool";
+import { runWebMCPTool } from "@/lib/webmcp-telemetry";
 
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
@@ -57,6 +59,37 @@ function DashboardHome() {
   const cancelJobFn = useServerFn(cancelJob);
   const retryJobFn = useServerFn(retryJob);
   const runPipelineFn = useServerFn(runMockPipeline);
+
+  useWebMCP({
+    name: "list_dashboard_cases",
+    description: "List the FIR cases currently shown on the dashboard, including IDs needed to open details.",
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: () => runWebMCPTool("list_dashboard_cases", () =>
+      jobs.length === 0
+        ? "No cases shown."
+        : jobs.map((job) => `${job.id}: ${job.fir_records?.case_number || "No case number"} | ${job.fir_records?.district || "Unknown district"} | ${job.status}`).join("\n"),
+    ),
+  });
+
+  useWebMCP({
+    name: "open_case_details",
+    description: "Open the details drawer for a case visible on the dashboard.",
+    annotations: { untrustedContentHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        job_id: { type: "string", description: "A job ID returned by list_dashboard_cases." },
+      },
+      required: ["job_id"],
+    },
+    execute: ({ job_id }: { job_id: string }) => runWebMCPTool("open_case_details", () => {
+      if (typeof job_id !== "string") throw new Error("job_id must be a string returned by list_dashboard_cases.");
+      const job = jobs.find((candidate) => candidate.id === job_id);
+      if (!job) throw new Error("Case is not in the current dashboard view.");
+      setSelectedJobId(job.id);
+      return `Opened details for ${job.fir_records?.case_number || job.id}.`;
+    }),
+  });
 
   const handleCancel = async (jobId: string) => {
     try {

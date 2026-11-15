@@ -13,3 +13,5 @@
 - [x] Keep real-location geometry and characters visible while Google 3D loads; handle missing coverage
 - [ ] Live location search / Google 3D verification: user must sign in and validate on an authorized deployed origin
 - [ ] Image-only exact 3D reconstruction: blocked by missing measured depth/geometry; imagery is aligned ground context, not recovered building heights
+- [x] Add OAuth-protected MCP case tools, consent flow, and browser-local WebMCP controls
+- [ ] Publish the app before external MCP clients can connect; full hosted approval/reconnection test remains

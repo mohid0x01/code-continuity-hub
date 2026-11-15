@@ -3,9 +3,10 @@ import react from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
+import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
 export default defineConfig(async ({ command }) => {
-  const plugins: PluginOption[] = [tanstackStart(), tailwindcss(), react(), tsconfigPaths()];
+  const plugins: PluginOption[] = [tanstackStart(), mcpPlugin(), tailwindcss(), react(), tsconfigPaths()];
 
   // Nitro is only attached when the build targets a deploy host:
   //  - VERCEL=1 (set by Vercel's build runner) -> "vercel" preset

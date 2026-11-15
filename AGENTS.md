@@ -4,3 +4,4 @@
 - Display real map geometry while photoreal tiles load and fall back after bounded loading; missing coverage must not leave characters on an empty scene.
 - Select explicitly supplied Google provider credentials before connector credentials within a server-only boundary, never mixing their transports; custom deployments can lack connector runtime secrets.
 - Keep FIR location search independent of Google credentials: use authenticated OpenStreetMap geocoding with Pakistani city fallbacks, and render the picker map with OpenStreetMap tiles.
+- Expose agent integrations through OAuth-protected MCP tools with caller-scoped database access; keep browser-local WebMCP registrations separate so existing permissions remain authoritative.

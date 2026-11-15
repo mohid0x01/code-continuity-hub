@@ -6,8 +6,12 @@ import { SceneIQLogo } from "@/components/SceneIQLogo";
 import { Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { verifyAdminKey } from "@/lib/admin.functions";
+import { oauthReturnPath } from "@/lib/oauth-return-path";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>): { next?: string } => ({
+    next: typeof search["next"] === "string" ? search["next"] : undefined,
+  }),
   component: LoginPage,
   head: () => ({
     meta: [
@@ -29,6 +33,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const verifyKey = useServerFn(verifyAdminKey);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +54,7 @@ function LoginPage() {
         throw verifyErr;
       }
 
-      navigate({ to: "/dashboard" });
+      navigate({ to: oauthReturnPath(next ?? "/dashboard") });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
