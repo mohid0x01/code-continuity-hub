@@ -18,3 +18,4 @@
 - [x] Replace childish crime-scene visuals with rigged CC0 models, PBR materials, realistic lighting, and cinematic camera movement
 - [x] Diagnose and fix AI video refusal persistence, polling, and visible terminal errors without bypassing provider denials
 - [x] Redesign the reconstruction viewer GUI and verify signed-in rendering, timeline playback, and saved video display
+- [ ] Make 3D reconstruction follow FIR counts, weapons, actions and setting (for example two armed suspects entering a shop), with realistic scene detail and verification
