@@ -38,13 +38,15 @@ export const startAiVideo = createServerFn({ method: "POST" })
     });
     try {
       const vj = await ai.createVeoJob(prompt, ai.REENACTMENT_NEGATIVE);
-      await supabase.from("fir_jobs").update({
+      const { error: saveError } = await supabase.from("fir_jobs").update({
         ai_video_job_id: vj.id, video_status: "ai_processing", ai_video_error: null,
       }).eq("id", data.jobId);
+      if (saveError) throw new Error(`Video job was created but could not be saved: ${saveError.message}`);
       return { ok: true, status: "ai_processing" };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "AI video failed to start";
-      await supabase.from("fir_jobs").update({ video_status: "ai_failed", ai_video_error: msg }).eq("id", data.jobId);
+      const { error: failureSaveError } = await supabase.from("fir_jobs").update({ video_status: "ai_failed", ai_video_error: msg }).eq("id", data.jobId);
+      if (failureSaveError) throw new Error(`${msg}. Failure state could not be saved: ${failureSaveError.message}`);
       throw new Error(msg);
     }
   });
@@ -56,7 +58,10 @@ export const pollAiVideo = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { data: job } = await supabase
-      .from("fir_jobs").select("ai_video_job_id, ai_video_path, video_url, video_status").eq("id", data.jobId).single();
+      .from("fir_jobs").select("ai_video_job_id, ai_video_path, video_url, video_status, ai_video_error").eq("id", data.jobId).single();
+    if (job?.video_status === "ai_failed") {
+      return { status: "ai_failed" as const, error: job.ai_video_error ?? "AI video generation failed" };
+    }
     if (!job?.ai_video_job_id) return { status: "none" as const };
     if (job.ai_video_path && job.video_url) return { status: "completed" as const, url: job.video_url };
 
@@ -64,8 +69,9 @@ export const pollAiVideo = createServerFn({ method: "POST" })
     const vj = await ai.pollVeoJob(job.ai_video_job_id);
     if (vj.status === "failed") {
       const msg = vj.error?.message ?? "AI video generation failed";
-      await supabase.from("fir_jobs").update({ video_status: "ai_failed", ai_video_error: msg }).eq("id", data.jobId);
-      return { status: "failed" as const, error: msg };
+      const { error: saveError } = await supabase.from("fir_jobs").update({ video_status: "ai_failed", ai_video_error: msg }).eq("id", data.jobId);
+      if (saveError) throw new Error(`Video failure state could not be saved: ${saveError.message}`);
+      return { status: "ai_failed" as const, error: msg };
     }
     if (vj.status !== "completed") return { status: "processing" as const, progress: vj.progress ?? 0 };
 
@@ -73,9 +79,11 @@ export const pollAiVideo = createServerFn({ method: "POST" })
     const path = `videos/${data.jobId}/ai-${vj.id}.mp4`;
     const { error: upErr } = await supabase.storage.from("evidence").upload(path, bytes, { contentType: "video/mp4", upsert: true });
     if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
-    const { data: signed } = await supabase.storage.from("evidence").createSignedUrl(path, 60 * 60 * 24 * 365);
-    await supabase.from("fir_jobs").update({
-      ai_video_path: path, video_url: signed?.signedUrl ?? null, video_status: "completed",
+    const { data: signed, error: signError } = await supabase.storage.from("evidence").createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (signError || !signed?.signedUrl) throw new Error(`Video URL could not be created: ${signError?.message ?? "empty signed URL"}`);
+    const { error: saveError } = await supabase.from("fir_jobs").update({
+      ai_video_path: path, video_url: signed.signedUrl, video_status: "completed", ai_video_error: null,
     }).eq("id", data.jobId);
-    return { status: "completed" as const, url: signed?.signedUrl ?? null };
+    if (saveError) throw new Error(`Completed video could not be saved: ${saveError.message}`);
+    return { status: "completed" as const, url: signed.signedUrl };
   });

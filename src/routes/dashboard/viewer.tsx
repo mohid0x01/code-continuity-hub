@@ -23,6 +23,10 @@ import {
   Box,
   FileDown,
   Sparkles,
+  PanelLeft,
+  PanelRight,
+  ShieldCheck,
+  Clapperboard,
 } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -39,6 +43,7 @@ import { EvidenceManager } from "@/components/EvidenceManager";
 import { fetchLocationScene } from "@/lib/location-scene.functions";
 import type { RealWorldScene } from "@/lib/location-scene.functions";
 import { deriveRenderEntities, buildRenderTimeline, diagnoseVehicles } from "@/lib/scene-render";
+import { isAiVideoProcessing, resolveAiPollResult } from "@/lib/ai-video-state";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -252,20 +257,20 @@ function SceneViewer() {
   const startAiFn = useServerFn(startAiVideo);
   // Poll the AI clip while it renders; the server stores the MP4 then returns its URL.
   useEffect(() => {
-    if (!jobId || (videoStatus !== "ai_processing" && videoStatus !== "processing")) return;
-    if (videoStatusRaw !== "ai_processing" && aiState?.status !== "processing") return;
+    if (!jobId || !isAiVideoProcessing(videoStatus)) return;
     let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       try {
         const r = await pollAiFn({ data: { jobId } });
         if (stop) return;
-        setAiState(r as never);
-        if (r.status === "processing") setTimeout(tick, 8000);
+        setAiState(resolveAiPollResult(r as never));
+        if (r.status === "processing") timer = setTimeout(tick, 8000);
       } catch (e) { if (!stop) setAiState({ status: "ai_failed", error: e instanceof Error ? e.message : "Poll failed" }); }
     };
     tick();
-    return () => { stop = true; };
-  }, [jobId, videoStatusRaw]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { stop = true; if (timer) clearTimeout(timer); };
+  }, [jobId, videoStatus, pollAiFn]);
   const handleAiVideo = async () => {
     if (!jobId) return;
     try { await startAiFn({ data: { jobId } }); setAiState({ status: "processing" }); }
@@ -409,7 +414,7 @@ function SceneViewer() {
   return (
     <div className="-m-8 flex h-[calc(100vh-73px)] flex-col bg-background">
       {/* Top bar */}
-      <div className="flex h-12 items-center justify-between border-b border-border-subtle bg-background px-4">
+      <div className="flex h-14 items-center justify-between border-b border-border-subtle bg-card/80 px-4 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <Link to="/dashboard" className="text-text-muted hover:text-gold"><ArrowLeft className="h-4 w-4" /></Link>
           <span className="font-mono text-sm text-gold">{String(caseNumber)}</span>
@@ -418,7 +423,10 @@ function SceneViewer() {
         <span className="text-sm text-text-secondary">
           {job?.status === "completed" ? "Scene Reconstruction" : `Pipeline: ${job?.status || "loading"}`}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setLeftOpen((v) => !v)} title="Toggle case panel" className={`rounded-md p-2 ${leftOpen ? "bg-gold/10 text-gold" : "text-text-muted hover:bg-surface"}`}><PanelLeft className="h-4 w-4" /></button>
+          <button onClick={() => setRightOpen((v) => !v)} title="Toggle reconstruction panel" className={`rounded-md p-2 ${rightOpen ? "bg-gold/10 text-gold" : "text-text-muted hover:bg-surface"}`}><PanelRight className="h-4 w-4" /></button>
+          <span className="mx-1 h-5 w-px bg-border-subtle" />
           <button onClick={() => setDebugOn((v) => !v)} title="Toggle real-location debug overlay"
             className={`rounded-[4px] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${debugOn ? "bg-emerald-500/15 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
             Debug
@@ -435,7 +443,7 @@ function SceneViewer() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel */}
         {leftOpen && (
-          <div className="w-[280px] shrink-0 overflow-y-auto border-r border-border bg-card p-4">
+          <div className="hidden w-[264px] shrink-0 overflow-y-auto border-r border-border-subtle bg-card/80 p-4 backdrop-blur-xl lg:block">
             <h3 className="label-uppercase mb-3">Scene Entities</h3>
             <div className="space-y-2">
               {[...renderActorEntities, ...renderVehicleEntities].map((e) => (
@@ -483,9 +491,9 @@ function SceneViewer() {
         )}
 
         {/* 3D Canvas */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           {/* Tab bar */}
-          <div className="flex h-10 items-center gap-1 border-b border-border-subtle bg-background/80 px-3 backdrop-blur">
+          <div className="flex h-12 items-center gap-1 overflow-x-auto border-b border-border-subtle bg-card/70 px-3 backdrop-blur-xl">
             {([
               { id: "scene", label: "3D Scene", icon: Box },
               { id: "video", label: "AI Video", icon: Film },
@@ -493,7 +501,7 @@ function SceneViewer() {
               { id: "source", label: "Source & Map", icon: FileText },
             ] as const).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${tab === t.id ? "bg-emerald-500/10 text-emerald-400" : "text-text-muted hover:text-text-secondary"}`}>
+                className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${tab === t.id ? "bg-gold/10 text-gold shadow-[inset_0_0_0_1px_var(--color-gold-dim)]" : "text-text-muted hover:bg-surface hover:text-text-secondary"}`}>
                 <t.icon className="h-3.5 w-3.5" /> {t.label}
               </button>
             ))}
@@ -595,26 +603,45 @@ function SceneViewer() {
               )}
             </>
           ) : tab === "video" ? (
-            <div className="flex h-[calc(100%-2.5rem)] items-center justify-center p-8">
+            <div className="h-[calc(100%-3rem)] overflow-y-auto p-6 lg:p-10">
               {videoUrl2 ? (
-                <video src={videoUrl2} controls className="max-h-full max-w-full rounded-[6px] border border-border-subtle shadow-2xl" />
+                <div className="mx-auto max-w-5xl">
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <div><p className="label-uppercase">Incident recording</p><h3 className="mt-1 text-xl font-semibold text-text-primary">Reconstruction video</h3></div>
+                    <span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold">Ready</span>
+                  </div>
+                  <video src={videoUrl2} controls className="max-h-[70vh] w-full rounded-xl border border-border-subtle bg-background shadow-2xl" />
+                </div>
               ) : (
-                <div className="text-center">
-                  <Film className="mx-auto h-12 w-12 text-emerald-400/50" />
-                  <h3 className="mt-4 text-lg font-semibold text-text-primary">AI 3D Incident Video</h3>
-                  <p className="mt-2 max-w-md text-sm text-text-muted">
-                    Records the animated 3D reconstruction using the selected real-world location, mapped roads/buildings/places, actors, vehicles, and the FIR event timeline.
-                  </p>
-                  <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-emerald-400">Status: {videoStatus ?? "not started"}</p>
-                  <button onClick={handleGenerateVideo} disabled={recording}
-                    className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-emerald-500/15 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50">
-                    <Sparkles className="h-4 w-4" /> {recording ? "Recording…" : "Generate 3D Video"}
-                  </button>
-                  <button onClick={handleAiVideo} disabled={videoStatus === "processing" || videoStatus === "ai_processing"}
-                    className="mt-3 ml-3 inline-flex items-center gap-2 rounded-[8px] border border-emerald-500/30 px-6 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50">
-                    {videoStatus === "processing" || videoStatus === "ai_processing" ? `AI rendering… ${aiState?.progress ?? 0}%` : "Generate with AI"}
-                  </button>
-                  {aiError && videoStatus === "ai_failed" && <p className="mt-3 text-xs text-destructive">{aiError}</p>}
+                <div className="mx-auto max-w-4xl">
+                  <div className="flex items-start gap-4">
+                    <div className="rounded-xl border border-gold/20 bg-gold/10 p-3"><Film className="h-6 w-6 text-gold" /></div>
+                    <div><p className="label-uppercase">Video workspace</p><h3 className="mt-1 text-2xl font-semibold tracking-tight text-text-primary">Turn this timeline into an incident video</h3><p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">Use the exact 3D scene for a deterministic recording, or request one cinematic AI reconstruction from the same case data.</p></div>
+                  </div>
+                  <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-border-subtle bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-text-secondary"><span className="h-1.5 w-1.5 rounded-full bg-gold" />{videoStatus ?? "not started"}{(videoStatus === "processing" || videoStatus === "ai_processing") ? ` · ${aiState?.progress ?? 0}%` : ""}</div>
+                  <div className="mt-6 grid gap-4 md:grid-cols-2">
+                    <section className="rounded-xl border border-border-subtle bg-card/80 p-5 shadow-xl">
+                      <Clapperboard className="h-5 w-5 text-gold" />
+                      <h4 className="mt-4 font-semibold text-text-primary">Record the 3D scene</h4>
+                      <p className="mt-2 min-h-16 text-sm leading-relaxed text-text-muted">Captures the mapped location, rigged actors, vehicle and every timeline event at 60 fps. Best for a repeatable case record.</p>
+                      <button onClick={handleGenerateVideo} disabled={recording} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gold px-4 py-3 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
+                        {recording ? <Loader className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{recording ? "Recording scene…" : "Generate 3D video"}
+                      </button>
+                    </section>
+                    <section className="rounded-xl border border-border-subtle bg-card/80 p-5 shadow-xl">
+                      <ShieldCheck className="h-5 w-5 text-gold" />
+                      <h4 className="mt-4 font-semibold text-text-primary">Cinematic AI render</h4>
+                      <p className="mt-2 min-h-16 text-sm leading-relaxed text-text-muted">Creates one new clip from the FIR location, people, vehicles and actions. The finished MP4 is saved to private case storage.</p>
+                      <button onClick={handleAiVideo} disabled={isAiVideoProcessing(videoStatus)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/35 bg-gold/10 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gold transition hover:bg-gold/15 disabled:opacity-50">
+                        {(videoStatus === "processing" || videoStatus === "ai_processing") && <Loader className="h-4 w-4 animate-spin" />}{videoStatus === "processing" || videoStatus === "ai_processing" ? "AI rendering…" : videoStatus === "ai_failed" ? "Start a new AI render" : "Generate with AI"}
+                      </button>
+                    </section>
+                  </div>
+                  {aiError && (videoStatus === "ai_failed" || videoStatus === "failed") && (
+                    <div role="alert" className="mt-5 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">This AI request did not produce a video</p><p className="mt-1 leading-relaxed">{aiError}</p><p className="mt-2 text-xs opacity-80">The request was not automatically retried or rephrased. You can still record the 3D scene above.</p></div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -636,7 +663,7 @@ function SceneViewer() {
 
         {/* Right panel */}
         {rightOpen && (
-          <div className="w-[240px] shrink-0 overflow-y-auto border-l border-border bg-card p-4">
+          <div className="hidden w-[272px] shrink-0 overflow-y-auto border-l border-border-subtle bg-card/80 p-4 backdrop-blur-xl xl:block">
             <h3 className="label-uppercase mb-3">Reconstruction Data</h3>
 
             <div className="space-y-3">
@@ -703,7 +730,7 @@ function SceneViewer() {
       </div>
 
       {/* Bottom timeline */}
-      <div className="border-t border-border-subtle bg-background px-6 py-4">
+      <div className="border-t border-border-subtle bg-card/85 px-6 py-4 shadow-[0_-16px_40px_color-mix(in_oklab,var(--background)_35%,transparent)] backdrop-blur-xl">
         <div className="flex items-center gap-4">
           <span className="font-mono text-[12px] text-gold">
             EVENT {events.length > 0 ? currentEvent + 1 : 0} / {totalEvents}
@@ -711,14 +738,15 @@ function SceneViewer() {
 
           <div className="flex items-center gap-2">
             <button onClick={() => setCurrentEvent(0)} className="text-text-muted hover:text-gold"><ChevronLeft className="h-4 w-4" /><ChevronLeft className="-ml-3 h-4 w-4" /></button>
-            <button onClick={prevEvent} className="text-text-muted hover:text-gold"><ChevronLeft className="h-4 w-4" /></button>
+            <button onClick={prevEvent} aria-label="Previous event" className="text-text-muted hover:text-gold"><ChevronLeft className="h-4 w-4" /></button>
             <button
               onClick={() => setPlaying(!playing)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gold text-background"
+              aria-label={playing ? "Pause timeline" : "Play timeline"}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gold text-primary-foreground shadow-lg transition hover:scale-105"
             >
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </button>
-            <button onClick={nextEvent} className="text-text-muted hover:text-gold"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={nextEvent} aria-label="Next event" className="text-text-muted hover:text-gold"><ChevronRight className="h-4 w-4" /></button>
             <button onClick={() => setCurrentEvent(totalEvents - 1)} className="text-text-muted hover:text-gold"><ChevronRight className="h-4 w-4" /><ChevronRight className="-ml-3 h-4 w-4" /></button>
           </div>
 

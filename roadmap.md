@@ -15,3 +15,6 @@
 - [ ] Image-only exact 3D reconstruction: blocked by missing measured depth/geometry; imagery is aligned ground context, not recovered building heights
 - [x] Add OAuth-protected MCP case tools, consent flow, and browser-local WebMCP controls
 - [ ] Publish the app before external MCP clients can connect; full hosted approval/reconnection test remains
+- [ ] Replace childish crime-scene visuals with realistic models, materials, lighting, and incident composition
+- [ ] Diagnose and fix AI video refusal handling without bypassing provider denials
+- [ ] Redesign the reconstruction viewer GUI and verify the complete viewer flow

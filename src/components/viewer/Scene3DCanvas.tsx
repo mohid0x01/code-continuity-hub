@@ -1,8 +1,11 @@
-import { useRef, useMemo, useEffect, useState, useCallback } from "react";
+import { useRef, useMemo, useEffect, useState, useCallback, Suspense } from "react";
 import { MapGround } from "./MapGround";
 import { GooglePhotorealTiles } from "./GooglePhotorealTiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, Environment, Lightformer, ContactShadows, Sky, Cloud } from "@react-three/drei";
+import { OrbitControls, Html, Environment, Lightformer, Sky } from "@react-three/drei";
+import { RealisticHuman } from "./RealisticHuman";
+import { RealisticVehicle } from "./RealisticVehicle";
+import { useSceneMaterials, disposeSceneMaterials } from "./SceneMaterials";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
@@ -421,8 +424,11 @@ function landuseColor(kind: string) {
  * map providers do not expose enough detail for that exact location.
  */
 function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
+  const materials = useSceneMaterials();
+  const { asphalt, concrete } = materials;
+  useEffect(() => () => disposeSceneMaterials(materials), [materials]);
   const buildings = useMemo(() => {
-    return scene.buildings.map((b, i) => {
+    return scene.buildings.slice(0, 180).map((b, i) => {
       const shape = new THREE.Shape();
       b.footprint.forEach(([x, z], idx) => {
         if (idx === 0) shape.moveTo(x, -z);
@@ -430,7 +436,10 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       });
       const geom = new THREE.ExtrudeGeometry(shape, {
         depth: b.height,
-        bevelEnabled: false,
+        bevelEnabled: true,
+        bevelSegments: 1,
+        bevelSize: 0.06,
+        bevelThickness: 0.06,
         curveSegments: 1,
       });
       // Extrude is on +Z of shape plane → rotate so height points up (+Y)
@@ -440,7 +449,8 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       const color = b.color
         ? new THREE.Color(b.color)
         : new THREE.Color().lerpColors(new THREE.Color("#c8b28d"), new THREE.Color("#6b7f96"), t);
-      return { i, geom, color, height: b.height };
+      const center = b.footprint.reduce((sum, [x, z]) => [sum[0] + x / b.footprint.length, sum[1] + z / b.footprint.length], [0, 0]);
+      return { i, geom, color, height: b.height, center };
     });
   }, [scene.buildings]);
 
@@ -519,7 +529,7 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
         <group key={`rd-${i}`} rotation={[0, -s.angle, 0]} position={[s.x, 0, s.z]}>
           <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
             <planeGeometry args={[s.length, s.width]} />
-            <meshStandardMaterial color={s.color} roughness={0.95} />
+            <primitive object={asphalt} attach="material" />
           </mesh>
           {s.width >= 4 && (
             <>
@@ -577,7 +587,13 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       {/* Extruded building footprints */}
       {buildings.map((b) => (
         <mesh key={`bl-${b.i}`} castShadow receiveShadow geometry={b.geom}>
-          <meshStandardMaterial color={b.color} roughness={0.78} />
+          <primitive object={concrete} attach="material" />
+          {b.i % 3 === 0 && (
+            <mesh position={[b.center[0], b.height + 0.32, b.center[1]]} castShadow receiveShadow>
+              <boxGeometry args={[1.15, 0.58, 0.85]} />
+              <meshStandardMaterial color="#777a76" roughness={0.65} metalness={0.32} />
+            </mesh>
+          )}
         </mesh>
       ))}
 
@@ -700,8 +716,8 @@ function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; 
   const { camera } = useThree();
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
-  useFrame(({ clock }) => {
-    if (!playing && events.length === 0) return;
+  useFrame(({ clock }, delta) => {
+    if (!playing) return;
     const evt = events[Math.min(currentEvent, Math.max(0, events.length - 1))];
     const entity = evt?.entity_id ? entities.find((e) => e.id === evt.entity_id) : entities[0];
     const tx = evt?.dest_x ?? entity?.position_x ?? 0;
@@ -709,7 +725,7 @@ function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; 
     const t = clock.getElapsedTime() * 0.22;
     const target = new THREE.Vector3(tx, 0.8, tz);
     const desired = new THREE.Vector3(tx + Math.cos(t) * 18, 9 + Math.sin(t * 0.7) * 1.2, tz + Math.sin(t) * 18);
-    camera.position.lerp(desired, 0.012);
+    camera.position.lerp(desired, 1 - Math.exp(-delta * 0.85));
     camera.lookAt(target);
   });
   return null;
@@ -783,20 +799,21 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
 
   return (
     <Canvas
-      shadows
-      dpr={[1.25, 2]}
+      shadows="soft"
+      dpr={[1, 1.6]}
       camera={{ position: [14, 9, 16], fov: 45, near: 0.1, far: 4000 }}
       style={{ width: "100%", height: "100%" }}
-      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
+      gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.95, preserveDrawingBuffer: true }}
+      onCreated={({ gl }) => gl.domElement.parentElement?.setAttribute("data-scene-ready", "loading")}
     >
       <color attach="background" args={["#8fbfe0"]} />
       <Sky sunPosition={[80, 40, 30]} turbidity={6} rayleigh={2} mieCoefficient={0.005} mieDirectionalG={0.8} />
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={["#cfe6ff", "#4a3d2a", 0.55]} />
+      <ambientLight intensity={0.3} />
+      <hemisphereLight args={["#cfe6ff", "#4a3d2a", 0.75]} />
       <directionalLight
         castShadow
         position={[30, 40, 20]}
-        intensity={1.4}
+        intensity={2.7}
         color="#fff1d4"
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -805,6 +822,8 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         shadow-camera-right={40}
         shadow-camera-top={40}
         shadow-camera-bottom={-40}
+        shadow-bias={-0.00012}
+        shadow-normalBias={0.035}
       />
       {/* Local IBL — a CDN preset fetch can hang the whole scene blank. */}
       <Environment resolution={256}>
@@ -812,9 +831,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         <Lightformer intensity={1.2} color="#ffd9a8" position={[-12, 4, -6]} rotation-y={Math.PI / 2} scale={[24, 3, 1]} />
         <Lightformer intensity={0.9} color="#bcd8ff" position={[12, 3, 8]} rotation-y={-Math.PI / 2} scale={[24, 3, 1]} />
       </Environment>
-      <Cloud position={[-20, 22, -15]} speed={0.15} opacity={0.55} />
-      <Cloud position={[18, 26, 10]} speed={0.1} opacity={0.4} />
-
+      <Suspense fallback={<RealLocationShell />}>
       {realWorld && (!useTiles || !tilesReady) && <RealWorldEnvironment scene={realWorld} />}
       {useTiles && realWorld ? (
         <GooglePhotorealTiles
@@ -827,15 +844,14 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         <RealLocationShell />
       ) : null}
 
-      <ContactShadows position={[0, 0.08, 0]} opacity={0.45} scale={60} blur={2.8} far={12} />
-
-      {actorEntities.map((e) => (
-        <HumanFigure key={e.id} entity={e} events={events} />
+      {actorEntities.map((e, index) => (
+        <RealisticHuman key={e.id} entity={e} events={events} index={index} />
       ))}
 
       {vehicleEntities.map((e) => (
-        <VehicleFigure key={e.id} entity={e} events={events} />
+        <RealisticVehicle key={e.id} entity={e} events={events} />
       ))}
+      </Suspense>
 
       {locationEntities.map((l) => (
         <LocationBeacon key={l.id} entity={l} />
@@ -856,7 +872,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         dampingFactor={0.1}
         minDistance={5}
         maxDistance={useTiles ? 400 : 80}
-        maxPolarAngle={Math.PI / 2.2}
+        maxPolarAngle={Math.PI / 2.04}
       />
 
       <fog attach="fog" args={["#b8d2e6", useTiles ? 300 : 55, useTiles ? 1500 : 140]} />
