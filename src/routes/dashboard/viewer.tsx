@@ -588,7 +588,7 @@ function SceneViewer() {
               )}
 
               {realWorld?.staticMapUrl && (
-                <div className="absolute right-4 top-14 w-52 overflow-hidden rounded-[6px] border border-gold/30 bg-background/70 backdrop-blur">
+                <div className="absolute right-4 top-24 w-52 overflow-hidden rounded-[6px] border border-gold/30 bg-background/70 backdrop-blur">
                   <img src={realWorld.staticMapUrl} alt="Location satellite preview" className="block w-full" />
                   <div className="px-2 py-1 text-[9px] uppercase tracking-[0.1em] text-gold">Satellite Preview</div>
                 </div>

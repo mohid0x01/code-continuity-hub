@@ -5,12 +5,13 @@ import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
 import incidentCarModel from "@/assets/models/incident-car.glb.asset.json";
+import incidentCarLocal from "@/assets/models/incident-car.glb?url";
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
 
 export function RealisticVehicle({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
-  const { scene } = useGLTF(incidentCarModel.url);
+  const { scene } = useGLTF(import.meta.env.DEV ? incidentCarLocal : incidentCarModel.url);
   const rootRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((state) => state.currentEvent);
   const model = useMemo(() => {

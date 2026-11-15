@@ -7,6 +7,8 @@ import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
 import forensicManModel from "@/assets/models/forensic-man.glb.asset.json";
 import forensicCivilianModel from "@/assets/models/forensic-civilian.glb.asset.json";
+import forensicManLocal from "@/assets/models/forensic-man.glb?url";
+import forensicCivilianLocal from "@/assets/models/forensic-civilian.glb?url";
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
@@ -36,7 +38,7 @@ function eventPositions(entity: SceneEntity, events: SceneEvent[]) {
   return result;
 }
 
-function RiggedHuman({ url, entity, events }: { url: string; entity: SceneEntity; events: SceneEvent[] }) {
+function RiggedHuman({ url, sourceScale, entity, events }: { url: string; sourceScale: number; entity: SceneEntity; events: SceneEvent[] }) {
   const { scene, animations } = useGLTF(url);
   const { gl } = useThree();
   const rootRef = useRef<THREE.Group>(null);
@@ -58,18 +60,36 @@ function RiggedHuman({ url, entity, events }: { url: string; entity: SceneEntity
         }
       }
     });
-    const initialBounds = new THREE.Box3().setFromObject(clone);
-    const size = initialBounds.getSize(new THREE.Vector3());
-    clone.scale.setScalar(1.78 / Math.max(size.y, 0.001));
-    const bounds = new THREE.Box3().setFromObject(clone);
-    const center = bounds.getCenter(new THREE.Vector3());
-    clone.position.set(-center.x, -bounds.min.y, -center.z);
+    // These Quaternius GLBs already carry a 100× armature/node transform.
+    // Box3 on a SkinnedMesh includes skinned bounds and double-counts that
+    // transform, so deriving a second scale from it makes the person tiny.
+    clone.scale.setScalar(sourceScale);
+    clone.position.set(0, 0, 0);
     return clone;
-  }, [scene]);
+  }, [scene, sourceScale]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => gl.domElement.parentElement?.setAttribute("data-scene-ready", "true"));
-    return () => cancelAnimationFrame(frame);
-  }, [gl, model]);
+    if (!import.meta.env.DEV) return () => cancelAnimationFrame(frame);
+    const debug = () => {
+      const root = rootRef.current;
+      if (!root) return null;
+      const bounds = new THREE.Box3().setFromObject(root);
+      return {
+        label: entity.label,
+        min: bounds.min.toArray(),
+        max: bounds.max.toArray(),
+        rootPosition: root.position.toArray(),
+        modelPosition: model.position.toArray(),
+        modelScale: model.scale.toArray(),
+      };
+    };
+    const target = window as unknown as { __sceneHumans?: Array<typeof debug> };
+    target.__sceneHumans = [...(target.__sceneHumans ?? []), debug];
+    return () => {
+      cancelAnimationFrame(frame);
+      target.__sceneHumans = (target.__sceneHumans ?? []).filter((candidate) => candidate !== debug);
+    };
+  }, [gl, model, entity.label]);
   const { actions } = useAnimations(animations, rootRef);
   const positions = useMemo(() => eventPositions(entity, events), [entity, events]);
   const target = useMemo(() => {
@@ -147,6 +167,8 @@ function RiggedHuman({ url, entity, events }: { url: string; entity: SceneEntity
 }
 
 export function RealisticHuman({ entity, events, index }: { entity: SceneEntity; events: SceneEvent[]; index: number }) {
-  const url = index % 2 === 0 ? forensicManModel.url : forensicCivilianModel.url;
-  return <RiggedHuman url={url} entity={entity} events={events} />;
+  const url = import.meta.env.DEV
+    ? (index % 2 === 0 ? forensicManLocal : forensicCivilianLocal)
+    : (index % 2 === 0 ? forensicManModel.url : forensicCivilianModel.url);
+  return <RiggedHuman url={url} sourceScale={index % 2 === 0 ? 0.37 : 0.62} entity={entity} events={events} />;
 }

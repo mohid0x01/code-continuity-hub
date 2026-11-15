@@ -7,15 +7,16 @@ import asphaltRoughness from "@/assets/textures/asphalt_02_rough_1k.jpg.asset.js
 import concreteDiffuse from "@/assets/textures/concrete_wall_006_diff_1k.jpg.asset.json";
 import concreteNormal from "@/assets/textures/concrete_wall_006_nor_gl_1k.jpg.asset.json";
 import concreteRoughness from "@/assets/textures/concrete_wall_006_rough_1k.jpg.asset.json";
+import asphaltDiffuseLocal from "@/assets/textures/asphalt_02_diff_1k.jpg?url";
+import asphaltNormalLocal from "@/assets/textures/asphalt_02_nor_gl_1k.jpg?url";
+import asphaltRoughnessLocal from "@/assets/textures/asphalt_02_rough_1k.jpg?url";
+import concreteDiffuseLocal from "@/assets/textures/concrete_wall_006_diff_1k.jpg?url";
+import concreteNormalLocal from "@/assets/textures/concrete_wall_006_nor_gl_1k.jpg?url";
+import concreteRoughnessLocal from "@/assets/textures/concrete_wall_006_rough_1k.jpg?url";
 
-const urls = [
-  asphaltDiffuse.url,
-  asphaltNormal.url,
-  asphaltRoughness.url,
-  concreteDiffuse.url,
-  concreteNormal.url,
-  concreteRoughness.url,
-];
+const hostedUrls = [asphaltDiffuse.url, asphaltNormal.url, asphaltRoughness.url, concreteDiffuse.url, concreteNormal.url, concreteRoughness.url];
+const localUrls = [asphaltDiffuseLocal, asphaltNormalLocal, asphaltRoughnessLocal, concreteDiffuseLocal, concreteNormalLocal, concreteRoughnessLocal];
+const urls = import.meta.env.DEV ? localUrls : hostedUrls;
 
 export function useSceneMaterials() {
   const textures = useTexture(urls);
