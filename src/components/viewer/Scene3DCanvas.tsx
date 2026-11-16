@@ -6,6 +6,8 @@ import { OrbitControls, Html, Environment, Lightformer, Sky } from "@react-three
 import { RealisticHuman } from "./RealisticHuman";
 import { RealisticVehicle } from "./RealisticVehicle";
 import { useSceneMaterials, disposeSceneMaterials } from "./SceneMaterials";
+import { SceneContextEnvironment } from "./SceneContextEnvironment";
+import type { SceneContextSpec } from "@/lib/scene-context";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
@@ -18,6 +20,7 @@ interface Scene3DCanvasProps {
   entities: SceneEntity[];
   events: SceneEvent[];
   realWorld?: RealWorldScene | null;
+  context: SceneContextSpec;
   debug?: boolean;
   /** Stream Google Photorealistic 3D city at the incident point (falls back to OSM build). */
   photoreal?: boolean;
@@ -423,12 +426,16 @@ function landuseColor(kind: string) {
  * Google roads/places, and coordinate-anchored inferred structures when public
  * map providers do not expose enough detail for that exact location.
  */
-function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
+function RealWorldEnvironment({ scene, clearingRadius = 0 }: { scene: RealWorldScene; clearingRadius?: number }) {
   const materials = useSceneMaterials();
   const { asphalt, concrete } = materials;
   useEffect(() => () => disposeSceneMaterials(materials), [materials]);
   const buildings = useMemo(() => {
-    return scene.buildings.slice(0, 180).map((b, i) => {
+    const source = clearingRadius > 0 ? scene.buildings.filter((building) => {
+      const center = building.footprint.reduce((sum, [x, z]) => [sum[0] + x / building.footprint.length, sum[1] + z / building.footprint.length], [0, 0]);
+      return Math.hypot(center[0], center[1]) > clearingRadius;
+    }) : scene.buildings;
+    return source.slice(0, 180).map((b, i) => {
       const shape = new THREE.Shape();
       b.footprint.forEach(([x, z], idx) => {
         if (idx === 0) shape.moveTo(x, -z);
@@ -452,7 +459,7 @@ function RealWorldEnvironment({ scene }: { scene: RealWorldScene }) {
       const center = b.footprint.reduce((sum, [x, z]) => [sum[0] + x / b.footprint.length, sum[1] + z / b.footprint.length], [0, 0]);
       return { i, geom, color, height: b.height, center };
     });
-  }, [scene.buildings]);
+  }, [scene.buildings, clearingRadius]);
 
   // Cleanup extrude geometries on unmount
   useEffect(() => {
@@ -712,10 +719,14 @@ function ZoomBridge() {
   return null;
 }
 
-function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; events: SceneEvent[] }) {
+function CinematicCameraBridge({ entities, events, context }: { entities: SceneEntity[]; events: SceneEvent[]; context: SceneContextSpec }) {
   const { camera } = useThree();
   const currentEvent = useSceneStore((s) => s.currentEvent);
   const playing = useSceneStore((s) => s.playing);
+  useEffect(() => {
+    camera.position.set(...(context.interior ? [7.5, 4.8, 10.5] : [14, 9, 16]) as [number, number, number]);
+    camera.lookAt(0, context.interior ? 1.1 : 0.8, 0);
+  }, [camera, context.interior]);
   useFrame(({ clock }, delta) => {
     if (!playing) return;
     const evt = events[Math.min(currentEvent, Math.max(0, events.length - 1))];
@@ -723,8 +734,13 @@ function CinematicCameraBridge({ entities, events }: { entities: SceneEntity[]; 
     const tx = evt?.dest_x ?? entity?.position_x ?? 0;
     const tz = evt?.dest_z ?? entity?.position_z ?? 0;
     const t = clock.getElapsedTime() * 0.22;
-    const target = new THREE.Vector3(tx, 0.8, tz);
-    const desired = new THREE.Vector3(tx + Math.cos(t) * 18, 9 + Math.sin(t * 0.7) * 1.2, tz + Math.sin(t) * 18);
+    const target = new THREE.Vector3(tx, context.interior ? 1.1 : 0.8, tz);
+    const radius = context.interior ? 9.5 : 18;
+    const desired = new THREE.Vector3(
+      tx + Math.cos(t) * radius,
+      context.interior ? 4.6 + Math.sin(t * 0.7) * 0.35 : 9 + Math.sin(t * 0.7) * 1.2,
+      tz + Math.sin(t) * radius,
+    );
     camera.position.lerp(desired, 1 - Math.exp(-delta * 0.85));
     camera.lookAt(target);
   });
@@ -771,10 +787,10 @@ function VehicleDebugBounds({ entities }: { entities: SceneEntity[] }) {
   );
 }
 
-export function Scene3DCanvas({ entities, events, realWorld, debug = false, photoreal = true, onPhotorealStatus }: Scene3DCanvasProps) {
+export function Scene3DCanvas({ entities, events, realWorld, context, debug = false, photoreal = true, onPhotorealStatus }: Scene3DCanvasProps) {
   const [tilesFailed, setTilesFailed] = useState(false);
   const [tilesReady, setTilesReady] = useState(false);
-  const useTiles = photoreal && !!realWorld?.anchor && !tilesFailed;
+  const useTiles = photoreal && !context.interior && !!realWorld?.anchor && !tilesFailed;
   useEffect(() => {
     setTilesFailed(false);
     setTilesReady(false);
@@ -801,7 +817,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
     <Canvas
       shadows="soft"
       dpr={[1, 1.6]}
-      camera={{ position: [14, 9, 16], fov: 45, near: 0.1, far: 4000 }}
+      camera={{ position: context.interior ? [7.5, 4.8, 10.5] : [14, 9, 16], fov: context.interior ? 48 : 45, near: 0.1, far: 4000 }}
       style={{ width: "100%", height: "100%" }}
       gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.95, preserveDrawingBuffer: true }}
       onCreated={({ gl }) => gl.domElement.parentElement?.setAttribute("data-scene-ready", "loading")}
@@ -832,7 +848,8 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         <Lightformer intensity={0.9} color="#bcd8ff" position={[12, 3, 8]} rotation-y={-Math.PI / 2} scale={[24, 3, 1]} />
       </Environment>
       <Suspense fallback={<RealLocationShell />}>
-      {realWorld && (!useTiles || !tilesReady) && <RealWorldEnvironment scene={realWorld} />}
+      {realWorld && (!useTiles || !tilesReady) && <RealWorldEnvironment scene={realWorld} clearingRadius={context.interior ? 13 : 0} />}
+      <SceneContextEnvironment context={context} />
       {useTiles && realWorld ? (
         <GooglePhotorealTiles
           lat={realWorld.anchor.lat}
@@ -863,7 +880,7 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
       {debug && <axesHelper args={[10]} />}
 
       <ZoomBridge />
-      <CinematicCameraBridge entities={entities} events={events} />
+      <CinematicCameraBridge entities={entities} events={events} context={context} />
       <RecorderBridge />
 
       <OrbitControls
@@ -871,11 +888,11 @@ export function Scene3DCanvas({ entities, events, realWorld, debug = false, phot
         enableDamping
         dampingFactor={0.1}
         minDistance={5}
-        maxDistance={useTiles ? 400 : 80}
+        maxDistance={useTiles ? 400 : context.interior ? 38 : 80}
         maxPolarAngle={Math.PI / 2.04}
       />
 
-      <fog attach="fog" args={["#b8d2e6", useTiles ? 300 : 55, useTiles ? 1500 : 140]} />
+      <fog attach="fog" args={["#b8d2e6", useTiles ? 300 : context.interior ? 38 : 55, useTiles ? 1500 : context.interior ? 105 : 140]} />
     </Canvas>
   );
 }

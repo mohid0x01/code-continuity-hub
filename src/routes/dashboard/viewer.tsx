@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -27,6 +27,9 @@ import {
   PanelRight,
   ShieldCheck,
   Clapperboard,
+  Crosshair,
+  Store,
+  UsersRound,
 } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -44,6 +47,7 @@ import { fetchLocationScene } from "@/lib/location-scene.functions";
 import type { RealWorldScene } from "@/lib/location-scene.functions";
 import { deriveRenderEntities, buildRenderTimeline, diagnoseVehicles } from "@/lib/scene-render";
 import { isAiVideoProcessing, resolveAiPollResult } from "@/lib/ai-video-state";
+import { deriveSceneContext, reconcileSceneEntities, reconcileSceneEvents } from "@/lib/scene-context";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -128,8 +132,23 @@ function SceneViewer() {
   const nextEvent = useSceneStore((s) => s.nextEvent);
   const prevEvent = useSceneStore((s) => s.prevEvent);
 
+  const extractedRenderEntities = useMemo(() => deriveRenderEntities(entities, firText, jobId), [entities, firText, jobId]);
+  const sceneContext = useMemo(() => deriveSceneContext(extractedRenderEntities, firText), [extractedRenderEntities, firText]);
+  const renderEntities = useMemo(
+    () => reconcileSceneEntities(extractedRenderEntities, firText, jobId, sceneContext),
+    [extractedRenderEntities, firText, jobId, sceneContext],
+  );
+  const renderEvents = useMemo(() => reconcileSceneEvents(renderEntities, events, sceneContext), [renderEntities, events, sceneContext]);
+  const renderTimeline = buildRenderTimeline({ realWorld, entities, renderEntities, events: renderEvents });
+  const vehicleDiagnostics = diagnoseVehicles(renderEntities, firText);
+
+  useEffect(() => {
+    setTotalEvents(renderEvents.length);
+    if (useSceneStore.getState().currentEvent >= renderEvents.length) setCurrentEvent(Math.max(0, renderEvents.length - 1));
+  }, [renderEvents.length, setTotalEvents, setCurrentEvent]);
+
   const handleDownload = useCallback(() => {
-    const payload = { job, entities, events, firText };
+    const payload = { job, entities, events, renderEvents, sceneContext, firText };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -138,7 +157,7 @@ function SceneViewer() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Reconstruction downloaded");
-  }, [job, entities, events, firText, jobId]);
+  }, [job, entities, events, renderEvents, sceneContext, firText, jobId]);
 
   const handleShare = useCallback(async () => {
     const link = window.location.href;
@@ -206,7 +225,7 @@ function SceneViewer() {
 
   // Auto-play
   useEffect(() => {
-    if (!playing || events.length === 0) return;
+    if (!playing || renderEvents.length === 0) return;
     const interval = setInterval(() => {
       const store = useSceneStore.getState();
       if (store.currentEvent >= store.totalEvents - 1) {
@@ -216,7 +235,7 @@ function SceneViewer() {
       }
     }, 2000 / speed);
     return () => clearInterval(interval);
-  }, [playing, speed, events.length, setPlaying, nextEvent]);
+  }, [playing, speed, renderEvents.length, setPlaying, nextEvent]);
 
   const actorEntities = entities.filter(e => e.entity_type === "actor");
   const locationEntities = entities.filter(e => e.entity_type === "location");
@@ -318,10 +337,6 @@ function SceneViewer() {
     return () => { cancelled = true; };
   }, [primaryPin?.lat, primaryPin?.lng, fetchSceneFn]);
 
-  const renderEntities = deriveRenderEntities(entities, firText, jobId);
-  const renderTimeline = buildRenderTimeline({ realWorld, entities, renderEntities, events });
-  const vehicleDiagnostics = diagnoseVehicles(renderEntities, firText);
-
   const renderActorEntities = renderEntities.filter(e => e.entity_type === "actor");
   const renderVehicleEntities = renderEntities.filter(e => e.entity_type === "vehicle");
 
@@ -333,7 +348,7 @@ function SceneViewer() {
 
   const handleGenerateVideo = useCallback(async () => {
     if (!jobId) return;
-    if (events.length === 0) { toast.error("No scene events to render"); return; }
+    if (renderEvents.length === 0) { toast.error("No scene events to render"); return; }
 
     // Ensure we're on the 3D tab so the canvas is mounted & visible.
     setTab("scene");
@@ -343,7 +358,7 @@ function SceneViewer() {
     setPlaying(true);
     setRecording(true);
 
-    const durationSec = Math.min(30, Math.max(6, events.length * 2 + 2));
+    const durationSec = Math.min(30, Math.max(6, renderEvents.length * 2 + 2));
 
     // Wait for the canvas to mount, then start recording.
     // Longer wait ensures RecorderBridge (mounted inside <Canvas>) is live
@@ -388,7 +403,7 @@ function SceneViewer() {
       setRecording(false);
       setPlaying(false);
     }
-  }, [jobId, events.length, uploadVideoFn, logFn, setCurrentEvent, setPlaying, setSpeed]);
+  }, [jobId, renderEvents.length, uploadVideoFn, logFn, setCurrentEvent, setPlaying, setSpeed]);
 
   const handlePdfExport = useCallback(async () => {
     if (!firRec) { toast.error("FIR data not loaded yet"); return; }
@@ -444,6 +459,15 @@ function SceneViewer() {
         {/* Left panel */}
         {leftOpen && (
           <div className="hidden w-[264px] shrink-0 overflow-y-auto border-r border-border-subtle bg-card/80 p-4 backdrop-blur-xl lg:block">
+            <section className="mb-5 rounded-lg border border-gold/25 bg-gold/[0.06] p-3">
+              <div className="flex items-center gap-2 text-gold"><Crosshair className="h-4 w-4" /><h3 className="text-[11px] font-semibold uppercase tracking-[0.13em]">FIR Scene Match</h3></div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-card px-2 py-1 text-[10px] text-text-secondary"><UsersRound className="h-3 w-3" />{sceneContext.summary[0]}</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-card px-2 py-1 text-[10px] text-text-secondary"><Store className="h-3 w-3" />{sceneContext.setting.replace("_", " ")}</span>
+                {sceneContext.weapons.map((weapon) => <span key={weapon} className="rounded-full border border-gold/30 bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase text-gold">{weapon}</span>)}
+              </div>
+              {sceneContext.entering && <p className="mt-2 text-[10px] leading-relaxed text-text-muted">Each suspect has a separate animated entrance event.</p>}
+            </section>
             <h3 className="label-uppercase mb-3">Scene Entities</h3>
             <div className="space-y-2">
               {[...renderActorEntities, ...renderVehicleEntities].map((e) => (
@@ -518,10 +542,10 @@ function SceneViewer() {
           ) : tab === "scene" ? (
             <>
               <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader className="h-6 w-6 animate-spin text-gold" /></div>}>
-                <Scene3DCanvas entities={renderEntities} events={events} realWorld={realWorld} debug={debugOn} photoreal={photoreal} onPhotorealStatus={onTilesStatus} />
+                <Scene3DCanvas entities={renderEntities} events={renderEvents} realWorld={realWorld} context={sceneContext} debug={debugOn} photoreal={photoreal} onPhotorealStatus={onTilesStatus} />
               </Suspense>
 
-              {realWorld && (
+              {realWorld && !sceneContext.interior && (
                 <button
                   type="button"
                   onClick={() => { setPhotoreal((v) => !v); setTilesStatus(null); }}
@@ -543,8 +567,10 @@ function SceneViewer() {
                 {realWorldLoading ? (
                   <span className="text-text-muted">Loading real-world map…</span>
                 ) : realWorld ? (
-                  <span className="text-emerald-400">
-                    Real Location · {realWorld.source.toUpperCase()} · {realWorld.buildings.length} buildings · {realWorld.roads.length} roads · {realWorld.landmarks.length} places · r={realWorld.radiusMeters}m
+                    <span className="text-emerald-400">
+                    {sceneContext.interior
+                      ? `FIR ${sceneContext.setting.replace("_", " ").toUpperCase()} INTERIOR · REAL LOCATION ANCHORED`
+                      : `Real Location · ${realWorld.source.toUpperCase()} · ${realWorld.buildings.length} buildings · ${realWorld.roads.length} roads · ${realWorld.landmarks.length} places · r=${realWorld.radiusMeters}m`}
                   </span>
                 ) : (
                   <span className="text-amber-400">Waiting for selected location coordinates…</span>
@@ -594,10 +620,10 @@ function SceneViewer() {
                 </div>
               )}
 
-              {events.length > 0 && (
+              {renderEvents.length > 0 && (
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-[4px] border border-gold/20 bg-background/80 px-6 py-3 backdrop-blur-md">
                   <p className="max-w-md text-center text-sm text-text-primary">
-                    {events[currentEvent]?.description || ""}
+                    {renderEvents[currentEvent]?.description || ""}
                   </p>
                 </div>
               )}
@@ -754,7 +780,7 @@ function SceneViewer() {
           <div className="flex-1">
             <div className="relative h-1.5 rounded-full bg-border-subtle">
               <div className="h-full rounded-full bg-gold transition-all" style={{ width: totalEvents > 0 ? `${((currentEvent + 1) / totalEvents) * 100}%` : "0%" }} />
-              {events.map((_, i) => (
+              {renderEvents.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setCurrentEvent(i)}
@@ -779,7 +805,7 @@ function SceneViewer() {
             ))}
           </div>
         </div>
-        <p className="mt-2 text-[12px] text-text-muted">{events[currentEvent]?.description || "No events loaded"}</p>
+        <p className="mt-2 text-[12px] text-text-muted">{renderEvents[currentEvent]?.description || "No events loaded"}</p>
       </div>
     </div>
   );

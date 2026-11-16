@@ -90,6 +90,10 @@ export function buildReenactmentPrompt(input: {
     .filter((e) => e.entity_type === "vehicle")
     .slice(0, 3)
     .map((e) => `${e.label}${e.description ? ` — ${e.description.slice(0, 80)}` : ""}`);
+  const props = input.entities
+    .filter((e) => e.entity_type === "object" || e.entity_type === "location")
+    .slice(0, 6)
+    .map((e) => `${e.label}${e.description ? ` — ${e.description.slice(0, 80)}` : ""}`);
   const beats = input.events
     .sort((a, b) => a.sequence_number - b.sequence_number)
     .slice(0, 6)
@@ -101,8 +105,9 @@ export function buildReenactmentPrompt(input: {
     `Incident type: ${input.incidentType}.`,
     actors.length ? `People: ${actors.join("; ")}. Pakistani adults in shalwar kameez or local everyday clothing.` : "",
     vehicles.length ? `Vehicles: ${vehicles.join("; ")}.` : "",
+    props.length ? `Setting and statement-critical objects: ${props.join("; ")}.` : "",
     beats.length ? `Sequence of actions in order: ${beats.join(" ")}` : "",
-    `Show the actions clearly and factually as a neutral reconstruction, no gore, slow steady camera tracking the main suspect and victim. Audio: ambient street noise, distant traffic. No music.`,
+    `Preserve the exact number and roles of people and the named setting/objects. Show each person's action clearly and factually as a neutral reconstruction, no gore, slow steady camera tracking the action. Audio: ambient location noise, distant traffic where appropriate. No music.`,
   ]
     .filter(Boolean)
     .join("\n");

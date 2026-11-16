@@ -350,10 +350,16 @@ For each event:
 - duration_seconds 1-5
 
 Critical reconstruction rules:
+- Preserve EXACT person counts. Never merge several people into one group entity: create one actor entity per explicitly mentioned person, labelled Suspect 1, Suspect 2, Victim 1, etc.
+- For a group action, create a separate chronological event for EVERY actor so each person visibly performs it. Example: two suspects entering means two enter events with distinct entity_label values and plausible adjacent paths.
 - If the FIR mentions any car, vehicle, motorcycle, bike, rickshaw, truck, bus, or Urdu/Roman Urdu equivalent, you MUST create a vehicle entity.
 - Vehicle events must describe whether it arrived, parked, hit, escaped, transported someone, or remained stationary.
-- Do not omit important physical props (weapons, phones, cash, houses, roads, shops) if they explain what happened.
-- The 3D scene will be placed on the officer-selected real map coordinates, so your grid positions should describe relative movement around that exact incident pin.
+- Do not omit important physical props (weapons, phones, cash, houses, roads, shops) if they explain what happened. Create a separate object entity for each weapon type and name it precisely (Pistol, Rifle, Shotgun, Knife), never a generic "weapon".
+- Mention the carried weapon in each armed actor's description. Do not give weapons to victims, witnesses or bystanders unless the statement explicitly says they are armed.
+- Create a precise location entity for the incident setting (shop, bank, house, office, warehouse, street) and keep movement coordinates consistent with its entrance and interior.
+- Required example: "Two suspects armed with a pistol enter the shop" MUST produce exactly two suspect actor entities, a Pistol object, a Shop location, and one enter-shop event for each suspect.
+- Do not invent extra people, weapons, vehicles or actions that are not stated or reasonably implied by the narrative.
+- The 3D scene will be placed on the officer-selected real map coordinates, so your grid positions should describe relative movement around that exact incident pin. For a shop entrance, start outside at positive z and finish inside near the origin.
 
 Return ONLY valid JSON matching the schema. No prose, no markdown.`;
 

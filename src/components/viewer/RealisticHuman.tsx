@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Html, useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
+import type { WeaponKind } from "@/lib/scene-context";
+import { WeaponAttachment } from "./WeaponAttachment";
 import forensicManModel from "@/assets/models/forensic-man.glb.asset.json";
 import forensicCivilianModel from "@/assets/models/forensic-civilian.glb.asset.json";
 import forensicManLocal from "@/assets/models/forensic-man.glb?url";
@@ -16,7 +18,7 @@ type ActionKind = "walk" | "run" | "attack" | "fall" | "aim" | "grab" | "flee" |
 
 function classifyAction(label: string | undefined): ActionKind {
   const text = (label || "").toLowerCase();
-  if (/(fire|shoot|gun|goli|aim|pistol)/.test(text)) return "aim";
+  if (/(fire|shoot|gun|goli|aim|pistol|rifle|shotgun)/.test(text)) return "aim";
   if (/(hit|attack|stab|strike|beat|assault|hamla|maar|punch)/.test(text)) return "attack";
   if (/(fall|collapse|injur|die|dead|gir|zakhmi)/.test(text)) return "fall";
   if (/(snatch|grab|steal|rob|loot|cheen|pick)/.test(text)) return "grab";
@@ -38,12 +40,26 @@ function eventPositions(entity: SceneEntity, events: SceneEvent[]) {
   return result;
 }
 
-function RiggedHuman({ url, sourceScale, entity, events }: { url: string; sourceScale: number; entity: SceneEntity; events: SceneEvent[] }) {
+function entityWeapon(entity: SceneEntity): WeaponKind | null {
+  if (!entity.metadata || typeof entity.metadata !== "object" || Array.isArray(entity.metadata)) return null;
+  const value = (entity.metadata as Record<string, unknown>).weaponKind;
+  return value === "pistol" || value === "rifle" || value === "shotgun" || value === "smg" ? value : null;
+}
+
+function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
+  url: string;
+  sourceScale: number;
+  entity: SceneEntity;
+  events: SceneEvent[];
+  appearanceIndex: number;
+}) {
   const { scene, animations } = useGLTF(url);
   const { gl } = useThree();
   const rootRef = useRef<THREE.Group>(null);
   const activeClip = useRef("");
+  const [hand, setHand] = useState<THREE.Object3D | null>(null);
   const currentEvent = useSceneStore((state) => state.currentEvent);
+  const weaponKind = entityWeapon(entity);
   const model = useMemo(() => {
     const clone = SkeletonUtils.clone(scene);
     clone.traverse((child) => {
@@ -51,22 +67,35 @@ function RiggedHuman({ url, sourceScale, entity, events }: { url: string; source
         child.castShadow = true;
         child.receiveShadow = true;
         child.frustumCulled = false;
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        for (const material of materials) {
-          if (material instanceof THREE.MeshStandardMaterial) {
-            material.roughness = Math.max(0.48, material.roughness);
-            material.envMapIntensity = 0.85;
+        const source = Array.isArray(child.material) ? child.material : [child.material];
+        const materials = source.map((material) => {
+          const copy = material.clone();
+          if (copy instanceof THREE.MeshStandardMaterial) {
+            copy.roughness = Math.max(0.48, copy.roughness);
+            copy.envMapIntensity = 0.85;
+            copy.color.offsetHSL(0, 0, ((appearanceIndex % 3) - 1) * 0.035);
           }
-        }
+          return copy;
+        });
+        child.material = Array.isArray(child.material) ? materials : materials[0];
       }
     });
     // These Quaternius GLBs already carry a 100× armature/node transform.
-    // Box3 on a SkinnedMesh includes skinned bounds and double-counts that
-    // transform, so deriving a second scale from it makes the person tiny.
+    // Box3 on a SkinnedMesh double-counts it, so use the verified source scale.
     clone.scale.setScalar(sourceScale);
     clone.position.set(0, 0, 0);
     return clone;
-  }, [scene, sourceScale]);
+  }, [scene, sourceScale, appearanceIndex]);
+
+  useEffect(() => {
+    let match: THREE.Object3D | null = null;
+    model.traverse((node) => {
+      const normalized = node.name.toLowerCase().replace(/[^a-z]/g, "");
+      if (!match && /^(middlehandr|handr|righthand|lowerarmr)$/.test(normalized)) match = node;
+    });
+    setHand(match);
+  }, [model]);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => gl.domElement.parentElement?.setAttribute("data-scene-ready", "true"));
     if (!import.meta.env.DEV) return () => cancelAnimationFrame(frame);
@@ -76,10 +105,11 @@ function RiggedHuman({ url, sourceScale, entity, events }: { url: string; source
       const bounds = new THREE.Box3().setFromObject(root);
       return {
         label: entity.label,
+        weaponKind,
+        hand: hand?.name ?? null,
         min: bounds.min.toArray(),
         max: bounds.max.toArray(),
         rootPosition: root.position.toArray(),
-        modelPosition: model.position.toArray(),
         modelScale: model.scale.toArray(),
       };
     };
@@ -89,7 +119,8 @@ function RiggedHuman({ url, sourceScale, entity, events }: { url: string; source
       cancelAnimationFrame(frame);
       target.__sceneHumans = (target.__sceneHumans ?? []).filter((candidate) => candidate !== debug);
     };
-  }, [gl, model, entity.label]);
+  }, [gl, model, entity.label, weaponKind, hand]);
+
   const { actions } = useAnimations(animations, rootRef);
   const positions = useMemo(() => eventPositions(entity, events), [entity, events]);
   const target = useMemo(() => {
@@ -156,10 +187,11 @@ function RiggedHuman({ url, sourceScale, entity, events }: { url: string; source
   return (
     <group ref={rootRef} position={[positions[0]?.[0] || 0, positions[0]?.[1] || 0, positions[0]?.[2] || 0]}>
       <primitive object={model} />
+      {hand && rootRef.current && weaponKind && <WeaponAttachment kind={weaponKind} hand={hand} actorRoot={rootRef.current} />}
       <Html distanceFactor={14} position={[0, 2.08, 0]} center>
         <div className="scene-entity-label" style={{ borderColor: roleColor }}>
           <span className="scene-entity-dot" style={{ backgroundColor: roleColor }} />
-          {entity.label}
+          {entity.label}{weaponKind ? ` · ${weaponKind.toUpperCase()}` : ""}
         </div>
       </Html>
     </group>
@@ -167,8 +199,7 @@ function RiggedHuman({ url, sourceScale, entity, events }: { url: string; source
 }
 
 export function RealisticHuman({ entity, events, index }: { entity: SceneEntity; events: SceneEvent[]; index: number }) {
-  const url = import.meta.env.DEV
-    ? (index % 2 === 0 ? forensicManLocal : forensicCivilianLocal)
-    : (index % 2 === 0 ? forensicManModel.url : forensicCivilianModel.url);
-  return <RiggedHuman url={url} sourceScale={index % 2 === 0 ? 0.37 : 0.62} entity={entity} events={events} />;
+  // The adult-proportioned rig avoids the oversized-head civilian stylization.
+  const url = import.meta.env.DEV ? forensicManLocal : forensicManModel.url;
+  return <RiggedHuman url={url} sourceScale={0.37} entity={entity} events={events} appearanceIndex={index} />;
 }
