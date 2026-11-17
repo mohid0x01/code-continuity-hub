@@ -91,12 +91,14 @@ function RiggedHuman({ url, entity, events, appearanceIndex }: {
   }, [scene, appearanceIndex]);
 
   useEffect(() => {
-    let match: THREE.Object3D | null = null;
+    let handMatch: THREE.Object3D | null = null;
+    let fallback: THREE.Object3D | null = null;
     model.traverse((node) => {
       const normalized = node.name.toLowerCase().replace(/[^a-z]/g, "");
-      if (!match && /^(middlehandr|handr|righthand|lowerarmr)$/.test(normalized)) match = node;
+      if (!handMatch && /^(middlehandr|handr|righthand)$/.test(normalized)) handMatch = node;
+      if (!fallback && normalized === "lowerarmr") fallback = node;
     });
-    setHand(match);
+    setHand(handMatch ?? fallback);
   }, [model]);
 
   useEffect(() => {

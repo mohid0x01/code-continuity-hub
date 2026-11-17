@@ -18,5 +18,6 @@
 - [x] Replace childish crime-scene visuals with rigged CC0 models, PBR materials, realistic lighting, and cinematic camera movement
 - [x] Diagnose and fix AI video refusal persistence, polling, and visible terminal errors without bypassing provider denials
 - [x] Redesign the reconstruction viewer GUI and verify signed-in rendering, timeline playback, and saved video display
-- [ ] Make 3D reconstruction follow FIR counts, weapons, actions and setting (for example two armed suspects entering a shop), with realistic scene detail and verification
-- [ ] Reproduce and fix the home page “This page didn’t load” error, then verify / loads without runtime errors
+- [x] Make 3D reconstruction follow FIR counts, weapons, actions and setting (for example two armed suspects entering a shop), with realistic scene detail and verification
+- [x] Reproduce the home page error, declare the missing h3-v2 server dependency, and verify local / plus the Cloudflare production bundle
+- [ ] Publish the fixed build and verify scene-iq.dev no longer returns 500 (waiting for publish approval)

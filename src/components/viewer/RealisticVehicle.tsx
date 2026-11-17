@@ -6,12 +6,17 @@ import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
 import incidentCarModel from "@/assets/models/incident-car.glb.asset.json";
 import incidentCarLocal from "@/assets/models/incident-car.glb?url";
+import incidentMotorcycleModel from "@/assets/models/incident-motorcycle.glb.asset.json";
+import incidentMotorcycleLocal from "@/assets/models/incident-motorcycle.glb?url";
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
 
 export function RealisticVehicle({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
-  const { scene } = useGLTF(import.meta.env.DEV ? incidentCarLocal : incidentCarModel.url);
+  const isMotorcycle = /(motorcycle|motorbike|\bbike\b|موٹر|scooter)/i.test(`${entity.label} ${entity.description ?? ""} ${entity.source_text ?? ""}`);
+  const { scene } = useGLTF(import.meta.env.DEV
+    ? (isMotorcycle ? incidentMotorcycleLocal : incidentCarLocal)
+    : (isMotorcycle ? incidentMotorcycleModel.url : incidentCarModel.url));
   const rootRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((state) => state.currentEvent);
   const model = useMemo(() => {
@@ -32,12 +37,12 @@ export function RealisticVehicle({ entity, events }: { entity: SceneEntity; even
     });
     const initial = new THREE.Box3().setFromObject(clone);
     const size = initial.getSize(new THREE.Vector3());
-    clone.scale.setScalar(4.35 / Math.max(size.x, size.z, 0.001));
+    clone.scale.setScalar((isMotorcycle ? 2.25 : 4.35) / Math.max(size.x, size.z, 0.001));
     const bounds = new THREE.Box3().setFromObject(clone);
     const center = bounds.getCenter(new THREE.Vector3());
     clone.position.set(-center.x, -bounds.min.y + 0.03, -center.z);
     return clone;
-  }, [scene]);
+  }, [scene, isMotorcycle]);
   const positions = useMemo(() => {
     if (events.length === 0) return [[entity.position_x || 0, 0, entity.position_z || 0]];
     let position = [entity.position_x || 0, 0, entity.position_z || 0];
@@ -68,7 +73,7 @@ export function RealisticVehicle({ entity, events }: { entity: SceneEntity; even
   return (
     <group ref={rootRef} position={[positions[0]?.[0] || 0, 0, positions[0]?.[2] || 0]}>
       <primitive object={model} />
-      <Html distanceFactor={15} position={[0, 2.1, 0]} center>
+      <Html distanceFactor={15} position={[0, isMotorcycle ? 1.55 : 2.1, 0]} center>
         <div className="scene-entity-label border-gold/60">{entity.label}</div>
       </Html>
     </group>
