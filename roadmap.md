@@ -20,4 +20,5 @@
 - [x] Redesign the reconstruction viewer GUI and verify signed-in rendering, timeline playback, and saved video display
 - [x] Make 3D reconstruction follow FIR counts, weapons, actions and setting (for example two armed suspects entering a shop), with realistic scene detail and verification
 - [x] Reproduce the home page error, declare the missing h3-v2 server dependency, and verify local / plus the Cloudflare production bundle
-- [ ] Publish the fixed build and verify scene-iq.dev no longer returns 500 (waiting for publish approval)
+- [ ] Publish the fixed build and verify scene-iq.dev no longer returns 500 (h3-v2 alias removed from production bundle; verification pending)
+- [x] Fix Vercel production build failure resolving cloudflare:workers from the MCP package, then verify the Vercel preset build
