@@ -7,10 +7,8 @@ import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
 import type { WeaponKind } from "@/lib/scene-context";
 import { WeaponAttachment } from "./WeaponAttachment";
-import forensicManModel from "@/assets/models/forensic-man.glb.asset.json";
-import forensicCivilianModel from "@/assets/models/forensic-civilian.glb.asset.json";
-import forensicManLocal from "@/assets/models/forensic-man.glb?url";
-import forensicCivilianLocal from "@/assets/models/forensic-civilian.glb?url";
+import realisticAdultModel from "@/assets/models/realistic-adult.glb.asset.json";
+import realisticAdultLocal from "@/assets/models/realistic-adult.glb?url";
 
 type SceneEntity = Tables<"scene_entities">;
 type SceneEvent = Tables<"scene_events">;
@@ -46,9 +44,8 @@ function entityWeapon(entity: SceneEntity): WeaponKind | null {
   return value === "pistol" || value === "rifle" || value === "shotgun" || value === "smg" ? value : null;
 }
 
-function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
+function RiggedHuman({ url, entity, events, appearanceIndex }: {
   url: string;
-  sourceScale: number;
   entity: SceneEntity;
   events: SceneEvent[];
   appearanceIndex: number;
@@ -80,12 +77,18 @@ function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
         child.material = Array.isArray(child.material) ? materials : materials[0];
       }
     });
-    // These Quaternius GLBs already carry a 100× armature/node transform.
-    // Box3 on a SkinnedMesh double-counts it, so use the verified source scale.
-    clone.scale.setScalar(sourceScale);
-    clone.position.set(0, 0, 0);
+    // This CC0 MakeHuman-derived model is metre-scaled; normalize once to an
+    // adult height and place its soles on the floor before animation begins.
+    clone.updateMatrixWorld(true);
+    const initial = new THREE.Box3().setFromObject(clone);
+    const size = initial.getSize(new THREE.Vector3());
+    clone.scale.setScalar(1.78 / Math.max(size.y, 0.001));
+    clone.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(clone);
+    const center = bounds.getCenter(new THREE.Vector3());
+    clone.position.set(-center.x, -bounds.min.y, -center.z);
     return clone;
-  }, [scene, sourceScale, appearanceIndex]);
+  }, [scene, appearanceIndex]);
 
   useEffect(() => {
     let match: THREE.Object3D | null = null;
@@ -135,23 +138,25 @@ function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
   }, [events, entity.id, currentEvent]);
 
   useEffect(() => {
-    const wanted = action === "fall" ? ["death"]
-      : action === "attack" ? ["swordslash", "dagger_attack", "punch"]
-        : action === "aim" ? ["attacking_idle", "idle"]
-          : action === "grab" ? ["pickup", "punch", "idle"]
-            : action === "run" || action === "flee" ? ["run"]
-              : action === "walk" ? ["walk"] : ["idle"];
+    const wanted = action === "fall" ? ["idlestanding"]
+      : action === "attack" ? ["walkcarry", "idlestanding"]
+        : action === "aim" ? ["walkcarry", "idlestanding"]
+          : action === "grab" ? ["walkcarry", "idlestanding"]
+            : action === "run" || action === "flee" ? ["run", "jog"]
+              : action === "walk" ? ["walkrelaxed", "walkbrisk"] : ["idlestanding", "idle"];
     const clipName = Object.keys(actions).find((name) => {
       const normalized = name.toLowerCase().replace(/[^a-z]/g, "");
-      return wanted.some((candidate) => normalized.endsWith(candidate.replace(/[^a-z]/g, "")));
-    });
+      return wanted.some((candidate) => normalized.includes(candidate.replace(/[^a-z]/g, "")));
+    }) ?? Object.keys(actions)[0];
     if (!clipName || activeClip.current === clipName) return;
     const next = actions[clipName];
     if (!next) return;
     const previous = activeClip.current ? actions[activeClip.current] : undefined;
     next.reset();
-    next.setLoop(action === "fall" ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
-    next.clampWhenFinished = action === "fall";
+    next.setLoop(THREE.LoopRepeat, Infinity);
+    next.clampWhenFinished = false;
+    next.timeScale = (action === "aim" || action === "attack" || action === "grab") && clipName.toLowerCase().includes("carry") ? 0 : 1;
+    if (next.timeScale === 0) next.time = 0.18;
     next.fadeIn(0.22).play();
     previous?.fadeOut(0.22);
     activeClip.current = clipName;
@@ -169,10 +174,11 @@ function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
     }
     const speed = root.position.distanceTo(previous) / Math.max(delta, 1 / 120);
     if (speed > 0.08 && (action === "idle" || action === "walk" || action === "run" || action === "flee")) {
-      const clipName = Object.keys(actions).find((name) => name.toLowerCase().endsWith(speed > 1.2 ? "run" : "walk"));
+      const clipName = Object.keys(actions).find((name) => name.toLowerCase().includes(speed > 1.2 ? "run" : "walk_relaxed"));
       if (clipName && activeClip.current !== clipName) {
         const next = actions[clipName];
         const previousAction = actions[activeClip.current];
+        if (next) next.timeScale = 1;
         next?.reset().fadeIn(0.18).play();
         previousAction?.fadeOut(0.18);
         activeClip.current = clipName;
@@ -199,7 +205,6 @@ function RiggedHuman({ url, sourceScale, entity, events, appearanceIndex }: {
 }
 
 export function RealisticHuman({ entity, events, index }: { entity: SceneEntity; events: SceneEvent[]; index: number }) {
-  // The adult-proportioned rig avoids the oversized-head civilian stylization.
-  const url = import.meta.env.DEV ? forensicManLocal : forensicManModel.url;
-  return <RiggedHuman url={url} sourceScale={0.37} entity={entity} events={events} appearanceIndex={index} />;
+  const url = import.meta.env.DEV ? realisticAdultLocal : realisticAdultModel.url;
+  return <RiggedHuman url={url} entity={entity} events={events} appearanceIndex={index} />;
 }
