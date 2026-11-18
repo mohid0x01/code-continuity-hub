@@ -24,3 +24,5 @@
 - [x] Fix Vercel production build failure resolving cloudflare:workers from the MCP package, then verify the Vercel preset build
 - [x] Fix Vercel 3D model and texture 404s by using bundled assets on external hosts while retaining Lovable CDN assets on Lovable hosts; Vercel build includes the models
 - [x] Verify scene-iq.teamcyberops.xyz after Vercel redeploy: signed-in scene renders all entities with no realistic-adult.glb 404 or page errors
+- [ ] Sweep every image, model, texture, evidence and video loader for host-correct asset URLs on Lovable and Vercel
+- [ ] Sweep every page, API route and server/background function for production bundle imports that the host cannot resolve
