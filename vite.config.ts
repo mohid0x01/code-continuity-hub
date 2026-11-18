@@ -34,7 +34,7 @@ export default defineConfig(async ({ command }) => {
 
   return {
     plugins,
-    ...(nitroPreset === "cloudflare-module" && command === "build"
+    ...(command === "build" && nitroPreset !== "vercel"
       ? {
           environments: {
             ssr: {
