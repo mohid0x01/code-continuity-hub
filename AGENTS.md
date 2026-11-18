@@ -5,4 +5,4 @@
 - Select explicitly supplied Google provider credentials before connector credentials within a server-only boundary, never mixing their transports; custom deployments can lack connector runtime secrets.
 - Keep FIR location search independent of Google credentials: use authenticated OpenStreetMap geocoding with Pakistani city fallbacks, and render the picker map with OpenStreetMap tiles.
 - Expose agent integrations through OAuth-protected MCP tools with caller-scoped database access; keep browser-local WebMCP registrations separate so existing permissions remain authoritative.
-- Bundle `h3-v2` through `h3` and shim the optional `cloudflare:workers` env binding only for Vercel; published Workers cannot resolve standalone aliased chunks and Vercel has no Cloudflare binding.
+- Fully bundle SSR npm dependencies for Cloudflare, alias `h3-v2` to `h3`, and leave only native `cloudflare:workers` external; published SSR assets cannot resolve package imports at runtime. Vercel instead shims that optional binding and must use bundled model/texture URLs because `/__l5e` is served only by Lovable hosts.
