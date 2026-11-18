@@ -22,3 +22,4 @@
 - [x] Reproduce the home page error, declare the missing h3-v2 server dependency, and verify local / plus the Cloudflare production bundle
 - [ ] Publish the fixed build and verify scene-iq.dev no longer returns 500 (h3-v2 alias removed from production bundle; verification pending)
 - [x] Fix Vercel production build failure resolving cloudflare:workers from the MCP package, then verify the Vercel preset build
+- [ ] Fix Vercel 3D model and texture 404s by using bundled assets on external hosts while retaining Lovable CDN assets on Lovable hosts

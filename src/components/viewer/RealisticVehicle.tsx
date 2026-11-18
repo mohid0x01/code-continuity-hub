@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
+import { hostedAssetUrl } from "@/lib/hosted-assets";
 import incidentCarModel from "@/assets/models/incident-car.glb.asset.json";
 import incidentCarLocal from "@/assets/models/incident-car.glb?url";
 import incidentMotorcycleModel from "@/assets/models/incident-motorcycle.glb.asset.json";
@@ -14,9 +15,9 @@ type SceneEvent = Tables<"scene_events">;
 
 export function RealisticVehicle({ entity, events }: { entity: SceneEntity; events: SceneEvent[] }) {
   const isMotorcycle = /(motorcycle|motorbike|\bbike\b|موٹر|scooter)/i.test(`${entity.label} ${entity.description ?? ""} ${entity.source_text ?? ""}`);
-  const { scene } = useGLTF(import.meta.env.DEV
-    ? (isMotorcycle ? incidentMotorcycleLocal : incidentCarLocal)
-    : (isMotorcycle ? incidentMotorcycleModel.url : incidentCarModel.url));
+  const { scene } = useGLTF(isMotorcycle
+    ? hostedAssetUrl(incidentMotorcycleModel.url, incidentMotorcycleLocal)
+    : hostedAssetUrl(incidentCarModel.url, incidentCarLocal));
   const rootRef = useRef<THREE.Group>(null);
   const currentEvent = useSceneStore((state) => state.currentEvent);
   const model = useMemo(() => {

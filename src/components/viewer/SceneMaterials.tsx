@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { hostedAssetUrl } from "@/lib/hosted-assets";
 import asphaltDiffuse from "@/assets/textures/asphalt_02_diff_1k.jpg.asset.json";
 import asphaltNormal from "@/assets/textures/asphalt_02_nor_gl_1k.jpg.asset.json";
 import asphaltRoughness from "@/assets/textures/asphalt_02_rough_1k.jpg.asset.json";
@@ -16,7 +17,7 @@ import concreteRoughnessLocal from "@/assets/textures/concrete_wall_006_rough_1k
 
 const hostedUrls = [asphaltDiffuse.url, asphaltNormal.url, asphaltRoughness.url, concreteDiffuse.url, concreteNormal.url, concreteRoughness.url];
 const localUrls = [asphaltDiffuseLocal, asphaltNormalLocal, asphaltRoughnessLocal, concreteDiffuseLocal, concreteNormalLocal, concreteRoughnessLocal];
-const urls = import.meta.env.DEV ? localUrls : hostedUrls;
+const urls = localUrls.map((localUrl, index) => hostedAssetUrl(hostedUrls[index], localUrl));
 
 export function useSceneMaterials() {
   const textures = useTexture(urls);

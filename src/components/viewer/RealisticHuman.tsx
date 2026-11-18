@@ -6,6 +6,7 @@ import { SkeletonUtils } from "three-stdlib";
 import { useSceneStore } from "@/stores/sceneStore";
 import type { Tables } from "@/integrations/supabase/types";
 import type { WeaponKind } from "@/lib/scene-context";
+import { hostedAssetUrl } from "@/lib/hosted-assets";
 import { WeaponAttachment } from "./WeaponAttachment";
 import realisticAdultModel from "@/assets/models/realistic-adult.glb.asset.json";
 import realisticAdultLocal from "@/assets/models/realistic-adult.glb?url";
@@ -207,6 +208,6 @@ function RiggedHuman({ url, entity, events, appearanceIndex }: {
 }
 
 export function RealisticHuman({ entity, events, index }: { entity: SceneEntity; events: SceneEvent[]; index: number }) {
-  const url = import.meta.env.DEV ? realisticAdultLocal : realisticAdultModel.url;
+  const url = hostedAssetUrl(realisticAdultModel.url, realisticAdultLocal);
   return <RiggedHuman url={url} entity={entity} events={events} appearanceIndex={index} />;
 }

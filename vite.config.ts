@@ -23,6 +23,7 @@ export default defineConfig(async ({ command }) => {
         nitroPreset === "cloudflare-module"
           ? {
               preset: "cloudflare-module",
+              inlineDynamicImports: true,
               cloudflare: { nodeCompat: true, deployConfig: true },
               output: { dir: "dist", serverDir: "dist/server", publicDir: "dist/client" },
             }
@@ -33,6 +34,27 @@ export default defineConfig(async ({ command }) => {
 
   return {
     plugins,
+    ...(nitroPreset === "cloudflare-module" && command === "build"
+      ? {
+          environments: {
+            ssr: {
+              resolve: { noExternal: true },
+              build: {
+                rollupOptions: {
+                  // This is a native Worker module, not an npm package.
+                  external: ["cloudflare:workers"],
+                  output: {
+                    // The published host loads SSR as an asset and does not copy
+                    // its automatic package chunks. Keep those imports in the
+                    // SSR entry instead of producing an unresolvable assets/h3.
+                    manualChunks: () => undefined,
+                  },
+                },
+              },
+            },
+          },
+        }
+      : {}),
     resolve: {
       // TanStack's h3-v2 alias otherwise becomes a separate runtime asset that
       // the published Worker cannot resolve. Both packages expose h3 v2; using

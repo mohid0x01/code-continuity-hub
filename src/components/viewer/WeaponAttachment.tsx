@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { WeaponKind } from "@/lib/scene-context";
+import { hostedAssetUrl } from "@/lib/hosted-assets";
 import pistolHosted from "@/assets/models/forensic-pistol.glb.asset.json";
 import rifleHosted from "@/assets/models/forensic-rifle.glb.asset.json";
 import shotgunHosted from "@/assets/models/forensic-shotgun.glb.asset.json";
@@ -24,7 +25,7 @@ export function WeaponAttachment({ kind, hand, actorRoot }: {
   actorRoot: THREE.Object3D;
 }) {
   const config = MODELS[kind];
-  const { scene } = useGLTF(import.meta.env.DEV ? config.local : config.hosted);
+  const { scene } = useGLTF(hostedAssetUrl(config.hosted, config.local));
   const weapon = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
