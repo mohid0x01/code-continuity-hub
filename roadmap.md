@@ -20,7 +20,7 @@
 - [x] Redesign the reconstruction viewer GUI and verify signed-in rendering, timeline playback, and saved video display
 - [x] Make 3D reconstruction follow FIR counts, weapons, actions and setting (for example two armed suspects entering a shop), with realistic scene detail and verification
 - [x] Reproduce the home page error, declare the missing h3-v2 server dependency, and verify local / plus the Cloudflare production bundle
-- [ ] Publish the fixed build and verify scene-iq.dev no longer returns 500 (SSR npm imports are now bundled; live verification pending)
+- [x] Publish the fixed build and verify scene-iq.dev returns 200 and the signed-in 3D viewer renders without page errors
 - [x] Fix Vercel production build failure resolving cloudflare:workers from the MCP package, then verify the Vercel preset build
 - [x] Fix Vercel 3D model and texture 404s by using bundled assets on external hosts while retaining Lovable CDN assets on Lovable hosts; Vercel build includes the models
-- [ ] Verify scene-iq.teamcyberops.xyz after Vercel redeploys the saved commit
+- [x] Verify scene-iq.teamcyberops.xyz after Vercel redeploy: signed-in scene renders all entities with no realistic-adult.glb 404 or page errors
