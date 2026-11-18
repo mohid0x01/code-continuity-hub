@@ -38,7 +38,7 @@ export default defineConfig(async ({ command }) => {
       ? {
           environments: {
             ssr: {
-              resolve: { noExternal: true },
+              resolve: { noExternal: true as const },
               build: {
                 rollupOptions: {
                   // This is a native Worker module, not an npm package.
