@@ -8,6 +8,7 @@ import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { retryJob, runMockPipeline } from "@/lib/fir.functions";
 import { toast } from "sonner";
 import { z } from "zod";
+import { isAiRenderMode, stagesForRenderMode } from "@/lib/processing-mode";
 
 const searchSchema = z.object({
   jobId: z.string().optional(),
@@ -51,14 +52,6 @@ const STAGE_KEYS = [
   "scene_generation",
 ] as const;
 
-const stages = [
-  { key: "preprocessing", title: "Stage 1 · Narrative Preprocessing", desc: "Loading FIR text, detecting language (English / Urdu / Roman Urdu / Sindhi)" },
-  { key: "entity_extraction", title: "Stage 2 · AI Entity & Event Extraction", desc: "Calling Lovable AI with fallback chain; structured tool-call output" },
-  { key: "spatial_resolution", title: "Stage 3 · Spatial Coordinate Resolution", desc: "Validating schema; resolving 3D positions for every entity" },
-  { key: "timeline_sequencing", title: "Stage 4 · Timeline Sequencing", desc: "Re-ordering events chronologically; linking to entities" },
-  { key: "scene_generation", title: "Stage 5 · 3D Scene Manifest", desc: "Building scene graph and persisting reconstruction" },
-] as const;
-
 type Attempt = { model: string; ok: boolean; error?: string; ms: number };
 type Progress = {
   current_stage?: string;
@@ -84,21 +77,23 @@ function ProcessingPage() {
   const progress = (job?.pipeline_progress as Progress | null) ?? {};
   const attempts = progress.attempts ?? [];
   const activeModel = job?.llm_model;
+  const renderMode = (job as Record<string, unknown> | null)?.render_mode as string | undefined;
+  const aiMode = isAiRenderMode(renderMode);
+  const stages = stagesForRenderMode(renderMode);
 
   const startAiVideoFn = useServerFn(startAiVideo);
   const aiStartedRef = useRef(false);
   // Auto-navigate on completion (once). AI-mode jobs kick off the AI clip first.
   useEffect(() => {
     if (isCompleted && jobId) {
-      const mode = (job as Record<string, unknown> | null)?.render_mode;
-      if (mode === "ai" && !aiStartedRef.current) {
+      if (aiMode && !aiStartedRef.current) {
         aiStartedRef.current = true;
         startAiVideoFn({ data: { jobId } }).catch((e) => toast.error(e instanceof Error ? e.message : "AI video failed to start"));
       }
       const t = setTimeout(() => navigate({ to: "/dashboard/viewer", search: { jobId } }), 1500);
       return () => clearTimeout(t);
     }
-  }, [isCompleted, jobId, navigate]);
+  }, [isCompleted, jobId, navigate, aiMode, startAiVideoFn]);
 
   // Live elapsed-time ticker for the current stage
   useEffect(() => {
@@ -152,12 +147,12 @@ function ProcessingPage() {
         <div className="text-center">
           <p className="font-mono text-lg text-gold">{jobId ? jobId.slice(0, 8).toUpperCase() : "..."}</p>
           <h1 className="mt-2 font-display text-3xl font-bold text-text-primary">
-            {isFailed ? "Pipeline Failed" : isCompleted ? "Reconstruction Complete" : "Processing Your FIR"}
+            {isFailed ? "Pipeline Failed" : isCompleted ? "Reconstruction Complete" : aiMode ? "Processing with AI Help" : "Building with SCENEIQ Engine"}
           </h1>
           {!isFailed && !isCompleted && (
-            <p className="mt-2 text-sm text-text-muted">Do not close this tab. Your reconstruction is being generated.</p>
+            <p className="mt-2 text-sm text-text-muted">{aiMode ? "AI is extracting the scene and preparing your reconstruction." : "Local rules are building your 3D scene. No AI model or AI credits are being used."}</p>
           )}
-          {activeModel && !isFailed && (
+          {aiMode && activeModel && !isFailed && (
             <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.15em] text-text-muted">
               Model · <span className="text-gold">{activeModel}</span>
             </p>
@@ -300,7 +295,7 @@ function ProcessingPage() {
                       Processing...
                     </span>
                   )}
-                  {status === "active" && stage.key === "entity_extraction" && attempts.length > 0 && (
+                  {aiMode && status === "active" && stage.key === "entity_extraction" && attempts.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {attempts.map((a, idx) => (
                         <div
@@ -329,9 +324,11 @@ function ProcessingPage() {
             ? `Completed in ${job?.processing_time_ms ? `${(job.processing_time_ms / 1000).toFixed(1)}s` : "—"} · Redirecting to 3D viewer...`
             : isFailed
             ? "Pipeline halted. Review the error above and choose an action."
-            : attempts.length > 1
-            ? `Trying ${attempts.length} provider${attempts.length > 1 ? "s" : ""}...`
-            : "Live processing..."}
+            : aiMode && attempts.length > 1
+            ? `Trying ${attempts.length} providers...`
+            : aiMode
+            ? "Live AI-assisted processing..."
+            : "SCENEIQ Engine processing locally · no AI requests"}
         </p>
       </motion.div>
     </div>

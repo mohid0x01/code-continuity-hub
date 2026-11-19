@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { isAiRenderMode } from "./processing-mode";
 
 const idSchema = z.object({ jobId: z.string().uuid() });
 
@@ -12,10 +13,11 @@ export const startAiVideo = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { data: job, error } = await supabase
       .from("fir_jobs")
-      .select("id, ai_video_job_id, video_status, fir_records(city, area, formatted_address, incident_type, incident_date)")
+      .select("id, render_mode, ai_video_job_id, video_status, fir_records(city, area, formatted_address, incident_type, incident_date)")
       .eq("id", data.jobId)
       .single();
     if (error || !job) throw new Error("Job not found");
+    if (!isAiRenderMode(job.render_mode)) throw new Error("AI video is available only for jobs submitted With AI Help");
     if (job.ai_video_job_id && job.video_status === "ai_processing") return { ok: true, status: "ai_processing" };
 
     const fir = job.fir_records as unknown as {

@@ -1,6 +1,6 @@
 // Server-only: Lovable AI Gateway video jobs (Veo) for FIR re-enactments.
 const BASE = "https://ai.gateway.lovable.dev";
-export const AI_VIDEO_MODEL = "google/veo-3.1-fast";
+export const AI_VIDEO_MODEL = "google/veo-3.1";
 
 export type VideoJob = {
   id: string;
@@ -41,7 +41,7 @@ export async function createVeoJob(prompt: string, negativePrompt: string) {
         instances: [{ prompt }],
         parameters: {
           durationSeconds: 8,
-          resolution: "720p",
+          resolution: "1080p",
           sampleCount: 1,
           generateAudio: true,
           aspectRatio: "16:9",

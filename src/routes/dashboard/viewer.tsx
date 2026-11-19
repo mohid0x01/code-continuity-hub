@@ -48,6 +48,7 @@ import type { RealWorldScene } from "@/lib/location-scene.functions";
 import { deriveRenderEntities, buildRenderTimeline, diagnoseVehicles } from "@/lib/scene-render";
 import { isAiVideoProcessing, resolveAiPollResult } from "@/lib/ai-video-state";
 import { deriveSceneContext, reconcileSceneEntities, reconcileSceneEvents } from "@/lib/scene-context";
+import { isAiRenderMode } from "@/lib/processing-mode";
 
 const Scene3DCanvas = lazy(() =>
   import("@/components/viewer/Scene3DCanvas").then((m) => ({ default: m.Scene3DCanvas }))
@@ -271,12 +272,13 @@ function SceneViewer() {
   const [aiState, setAiState] = useState<{ status: string; url?: string | null; error?: string; progress?: number } | null>(null);
   const videoUrl2 = aiState?.url ?? videoUrl;
   const videoStatus = aiState?.status ?? videoStatusRaw;
+  const aiMode = isAiRenderMode(job?.render_mode);
   const aiError = aiState?.error ?? ((job as Record<string, unknown>)?.ai_video_error as string | null | undefined);
   const pollAiFn = useServerFn(pollAiVideo);
   const startAiFn = useServerFn(startAiVideo);
   // Poll the AI clip while it renders; the server stores the MP4 then returns its URL.
   useEffect(() => {
-    if (!jobId || !isAiVideoProcessing(videoStatus)) return;
+    if (!jobId || !aiMode || !isAiVideoProcessing(videoStatus)) return;
     let stop = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
@@ -289,7 +291,7 @@ function SceneViewer() {
     };
     tick();
     return () => { stop = true; if (timer) clearTimeout(timer); };
-  }, [jobId, videoStatus, pollAiFn]);
+  }, [jobId, videoStatus, pollAiFn, aiMode]);
   const handleAiVideo = async () => {
     if (!jobId) return;
     try { await startAiFn({ data: { jobId } }); setAiState({ status: "processing" }); }
@@ -520,7 +522,7 @@ function SceneViewer() {
           <div className="flex h-12 items-center gap-1 overflow-x-auto border-b border-border-subtle bg-card/70 px-3 backdrop-blur-xl">
             {([
               { id: "scene", label: "3D Scene", icon: Box },
-              { id: "video", label: "AI Video", icon: Film },
+              { id: "video", label: aiMode ? "AI Video" : "Video", icon: Film },
               { id: "evidence", label: "Evidence", icon: Paperclip },
               { id: "source", label: "Source & Map", icon: FileText },
             ] as const).map((t) => (
@@ -642,10 +644,10 @@ function SceneViewer() {
                 <div className="mx-auto max-w-4xl">
                   <div className="flex items-start gap-4">
                     <div className="rounded-xl border border-gold/20 bg-gold/10 p-3"><Film className="h-6 w-6 text-gold" /></div>
-                    <div><p className="label-uppercase">Video workspace</p><h3 className="mt-1 text-2xl font-semibold tracking-tight text-text-primary">Turn this timeline into an incident video</h3><p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">Use the exact 3D scene for a deterministic recording, or request one cinematic AI reconstruction from the same case data.</p></div>
+                    <div><p className="label-uppercase">Video workspace</p><h3 className="mt-1 text-2xl font-semibold tracking-tight text-text-primary">Turn this timeline into an incident video</h3><p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">{aiMode ? "Use the exact 3D scene for a deterministic recording, or request one cinematic Veo 3.1 reconstruction from the same case data." : "Record the exact SCENEIQ Engine 3D scene. This Engine job has no AI video option and makes no AI calls."}</p></div>
                   </div>
                   <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-border-subtle bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-text-secondary"><span className="h-1.5 w-1.5 rounded-full bg-gold" />{videoStatus ?? "not started"}{(videoStatus === "processing" || videoStatus === "ai_processing") ? ` · ${aiState?.progress ?? 0}%` : ""}</div>
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <div className={`mt-6 grid gap-4 ${aiMode ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
                     <section className="rounded-xl border border-border-subtle bg-card/80 p-5 shadow-xl">
                       <Clapperboard className="h-5 w-5 text-gold" />
                       <h4 className="mt-4 font-semibold text-text-primary">Record the 3D scene</h4>
@@ -654,16 +656,18 @@ function SceneViewer() {
                         {recording ? <Loader className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{recording ? "Recording scene…" : "Generate 3D video"}
                       </button>
                     </section>
-                    <section className="rounded-xl border border-border-subtle bg-card/80 p-5 shadow-xl">
-                      <ShieldCheck className="h-5 w-5 text-gold" />
-                      <h4 className="mt-4 font-semibold text-text-primary">Cinematic AI render</h4>
-                      <p className="mt-2 min-h-16 text-sm leading-relaxed text-text-muted">Creates one new clip from the FIR location, people, vehicles and actions. The finished MP4 is saved to private case storage.</p>
-                      <button onClick={handleAiVideo} disabled={isAiVideoProcessing(videoStatus)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/35 bg-gold/10 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gold transition hover:bg-gold/15 disabled:opacity-50">
-                        {(videoStatus === "processing" || videoStatus === "ai_processing") && <Loader className="h-4 w-4 animate-spin" />}{videoStatus === "processing" || videoStatus === "ai_processing" ? "AI rendering…" : videoStatus === "ai_failed" ? "Start a new AI render" : "Generate with AI"}
-                      </button>
-                    </section>
+                    {aiMode && (
+                      <section className="rounded-xl border border-border-subtle bg-card/80 p-5 shadow-xl">
+                        <ShieldCheck className="h-5 w-5 text-gold" />
+                        <h4 className="mt-4 font-semibold text-text-primary">Cinematic AI render · Veo 3.1</h4>
+                        <p className="mt-2 min-h-16 text-sm leading-relaxed text-text-muted">Creates one 1080p clip from the FIR location, people, vehicles and actions. The finished MP4 is saved to private case storage.</p>
+                        <button onClick={handleAiVideo} disabled={isAiVideoProcessing(videoStatus)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/35 bg-gold/10 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gold transition hover:bg-gold/15 disabled:opacity-50">
+                          {(videoStatus === "processing" || videoStatus === "ai_processing") && <Loader className="h-4 w-4 animate-spin" />}{videoStatus === "processing" || videoStatus === "ai_processing" ? "AI rendering…" : videoStatus === "ai_failed" ? "Start a new AI render" : "Generate with AI"}
+                        </button>
+                      </section>
+                    )}
                   </div>
-                  {aiError && (videoStatus === "ai_failed" || videoStatus === "failed") && (
+                  {aiMode && aiError && (videoStatus === "ai_failed" || videoStatus === "failed") && (
                     <div role="alert" className="mt-5 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">This AI request did not produce a video</p><p className="mt-1 leading-relaxed">{aiError}</p><p className="mt-2 text-xs opacity-80">The request was not automatically retried or rephrased. You can still record the 3D scene above.</p></div>
                     </div>
@@ -733,7 +737,7 @@ function SceneViewer() {
             )}
 
             <div className="mt-6 space-y-2 text-[11px] text-text-muted">
-              <div>Model: <span className="font-mono text-text-secondary">{job?.llm_model || "—"}</span></div>
+              <div>Model: <span className="font-mono text-text-secondary">{aiMode ? job?.llm_model || "—" : "SCENEIQ Engine · No AI"}</span></div>
               <div>Processing: <span className="font-mono text-text-secondary">{job?.processing_time_ms ? `${(job.processing_time_ms / 1000).toFixed(1)}s` : "—"}</span></div>
               <div>Entities: <span className="font-mono text-text-secondary">{entities.length}</span></div>
               <div>Events: <span className="font-mono text-text-secondary">{events.length}</span></div>

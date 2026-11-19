@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { buildEngineScene } from "./engine-scene";
 
 const submitFirSchema = z.object({
   // case_number is auto-generated server-side via DB default. Caller MUST NOT send it.
@@ -527,49 +528,58 @@ export const runMockPipeline = createServerFn({ method: "POST" })
       await setStage("preprocessing", []);
       const { data: job, error: jobErr } = await supabase
         .from("fir_jobs")
-        .select("fir_id, fir_records(raw_narrative, incident_type)")
+        .select("fir_id, render_mode, fir_records(raw_narrative, incident_type)")
         .eq("id", jobId)
         .single();
       if (jobErr || !job) throw new Error(`Could not load job: ${jobErr?.message}`);
       const fir = (job as { fir_records: { raw_narrative: string; incident_type: string } | null }).fir_records;
       if (!fir) throw new Error("FIR record missing");
 
-      // Stage 2: entity extraction — actual LLM call
+      // Stage 2: AI extraction only for With AI Help. Engine mode is local rules only.
       await setStage("entity_extraction", ["preprocessing"]);
-      const { result: scene, model: usedModel } = await callLLM(
-        fir.raw_narrative,
-        fir.incident_type,
-        async (attempt) => {
-          attemptsAll.push(attempt);
-          // Persist attempt to pipeline_attempts table (best-effort, ignore errors).
-          await supabase.from("pipeline_attempts").insert({
-            job_id: jobId,
-            officer_id: userId,
-            stage: "entity_extraction",
-            model: attempt.model,
-            attempt_number: attemptsAll.length,
-            ok: attempt.ok,
-            error_message: attempt.error ?? null,
-            latency_ms: attempt.ms,
-          });
-          // Live-publish attempt list so UI can show which providers were tried.
-          await supabase
-            .from("fir_jobs")
-            .update({
-              llm_model: attempt.model,
-              pipeline_progress: {
-                current_stage: "entity_extraction",
-                stages_completed: ["preprocessing"],
-                attempts: attemptsAll,
-                stage_started_at: new Date().toISOString(),
-              },
-            })
-            .eq("id", jobId);
-        },
-      );
+      const aiMode = job.render_mode === "ai";
+      let scene: NormalizedScene;
+      let usedModel: string | null = null;
+      if (aiMode) {
+        const extracted = await callLLM(
+          fir.raw_narrative,
+          fir.incident_type,
+          async (attempt) => {
+            attemptsAll.push(attempt);
+            // Persist attempt to pipeline_attempts table (best-effort, ignore errors).
+            await supabase.from("pipeline_attempts").insert({
+              job_id: jobId,
+              officer_id: userId,
+              stage: "entity_extraction",
+              model: attempt.model,
+              attempt_number: attemptsAll.length,
+              ok: attempt.ok,
+              error_message: attempt.error ?? null,
+              latency_ms: attempt.ms,
+            });
+            // Live-publish attempt list so UI can show which providers were tried.
+            await supabase
+              .from("fir_jobs")
+              .update({
+                llm_model: attempt.model,
+                pipeline_progress: {
+                  current_stage: "entity_extraction",
+                  stages_completed: ["preprocessing"],
+                  attempts: attemptsAll,
+                  stage_started_at: new Date().toISOString(),
+                },
+              })
+              .eq("id", jobId);
+          },
+        );
+        scene = extracted.result;
+        usedModel = extracted.model;
+      } else {
+        scene = buildEngineScene(fir.raw_narrative);
+      }
 
       if (!scene.entities?.length) {
-        throw new Error("AI extracted no entities from the narrative");
+        throw new Error(aiMode ? "AI extracted no entities from the narrative" : "SCENEIQ Engine could not map the narrative");
       }
 
       // Stage 3: spatial resolution — persist entities
@@ -647,6 +657,8 @@ export const runMockPipeline = createServerFn({ method: "POST" })
             entity_count: entityRows.length,
             event_count: eventRows.length,
             model: usedModel,
+            engine: aiMode ? "ai_assisted" : "sceneiq_deterministic_v1",
+            render_mode: job.render_mode,
             attempts: attemptsAll,
           },
           pipeline_progress: {

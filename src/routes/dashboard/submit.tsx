@@ -47,14 +47,8 @@ const incidentTypes = [
   { label: "Robbery", value: "robbery" },
   { label: "Other", value: "other" },
 ] as const;
-const pipelineStages = [
-  "Preprocessing",
-  "Entity Extraction",
-  "Spatial Resolution",
-  "Timeline Sequencing",
-  "Scene Generation",
-  "Video Render",
-];
+const engineStages = ["FIR text parsing", "Rule-based entity mapping", "Spatial layout", "Event sequencing", "3D scene generation"];
+const aiStages = ["AI entity & event extraction", "AI-assisted 3D scene", "Veo 3.1 1080p video render"];
 const tips = [
   "Include all actor descriptions as stated",
   "Mention locations by name or landmark",
@@ -168,7 +162,7 @@ function SubmitFIR() {
           New Incident Reconstruction
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          AI will extract entities, build a 3D scene, and render a video re-enactment.
+          Choose the no-AI SCENEIQ Engine, or With AI Help for AI extraction and a Veo 3.1 cinematic video.
         </p>
         <div className="gold-divider mt-2" style={{ width: "60px" }} />
 
@@ -331,20 +325,28 @@ function SubmitFIR() {
 
           <div className="gold-divider my-6" style={{ width: "100%" }} />
 
-          <h4 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">Pipeline Stages</h4>
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">SCENEIQ Engine · No AI</h4>
           <div className="mt-4 space-y-3">
-            {pipelineStages.map((stage, i) => (
+            {engineStages.map((stage, i) => (
               <div key={stage} className="flex items-center gap-3">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border-accent text-[10px] font-semibold text-text-muted">
-                  {i + 1}
-                </div>
+                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border-accent text-[10px] font-semibold text-text-muted">{i + 1}</div>
+                <span className="text-sm text-text-secondary">{stage}</span>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="mt-7 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted">With AI Help</h4>
+          <div className="mt-4 space-y-3">
+            {aiStages.map((stage, i) => (
+              <div key={stage} className="flex items-center gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border-accent text-[10px] font-semibold text-text-muted">{i + 1}</div>
                 <span className="text-sm text-text-secondary">{stage}</span>
               </div>
             ))}
           </div>
 
           <p className="mt-6 text-center font-mono text-[11px] text-text-muted">
-            Average processing time: 18-30 seconds
+            Engine: no AI credits · AI Help: usually 1–3 minutes
           </p>
         </div>
       </motion.div>
@@ -360,7 +362,7 @@ function SubmitFIR() {
                 <Bot className="mt-0.5 h-5 w-5 text-emerald-400" />
                 <span>
                   <span className="block text-sm font-semibold text-text-primary">With AI Help</span>
-                  <span className="block text-xs text-text-muted">AI plans every character's actions and generates a realistic 8-second re-enactment video of the real street, plus the 3D map scene. Uses AI credits; takes 1–3 minutes.</span>
+                  <span className="block text-xs text-text-muted">AI plans every character's actions and Veo 3.1 generates an 8-second 1080p re-enactment video, plus the 3D map scene. Uses AI credits; takes 1–3 minutes.</span>
                 </span>
               </button>
               <button type="button" onClick={() => submitWithMode("system")}
@@ -368,7 +370,7 @@ function SubmitFIR() {
                 <Cpu className="mt-0.5 h-5 w-5 text-text-secondary" />
                 <span>
                   <span className="block text-sm font-semibold text-text-primary">SCENEIQ Engine</span>
-                  <span className="block text-xs text-text-muted">Builds the 3D scene from the real map (roads, buildings) with 3D characters, and records the video in the browser.</span>
+                  <span className="block text-xs text-text-muted">No AI calls, no AI pipeline and no AI credits. Deterministic rules map the FIR onto the real location with 3D characters; video records in the browser.</span>
                 </span>
               </button>
             </div>
